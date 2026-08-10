@@ -23,7 +23,7 @@ dependencies:
   image: 3.3.0
 
 dependency_overrides:
-  image: 3:3.0
+  image: 3.3.0
   
 
 flutter:
