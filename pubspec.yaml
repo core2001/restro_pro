@@ -14,13 +14,13 @@ dependencies:
   path_provider: ^2.1.6
   intl: ^0.20.3
   flutter_bluetooth_serial_plus: ^0.5.1
-  esc_pos_utils: ^1.2.1
-  pdf: ^3.13.0
-  printing: ^5.12.2
+  esc_pos_utils: ^1.1.0
+  pdf: 3.10.4
+  printing: 5.11.1
   google_fonts: ^6.2.1
   fl_chart: ^0.68.0
   share_plus: ^13.3.0
-  image: ^4.3.0
+  image: 3.3.0
 
 dependency_overrides:
   
