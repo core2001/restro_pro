@@ -1,5 +1,5 @@
 import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial.dart';
-import 'package:esc_pos_utils/esc_pos_utils.dart';
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 
 class PrintService {
   Future<List<BluetoothDevice>> getDevices() => FlutterBluetoothSerial.instance.getBondedDevices();
