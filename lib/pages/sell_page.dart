@@ -10,8 +10,8 @@ class SellPage extends StatefulWidget {
 }
 
 class _SellPageState extends State<SellPage> {
-  List stocks = [];
-  List cart = [];
+  List<Map<String, dynamic>> stocks = []; // <- ADDED TYPES
+  List<Map<String, dynamic>> cart = [];   // <- ADDED TYPES
   final printer = PrintService();
 
   @override
@@ -20,7 +20,7 @@ class _SellPageState extends State<SellPage> {
     DBHelper.getStocks().then((v)=>setState(()=>stocks=v));
   }
 
-  addToCart(Map stock) {
+  addToCart(Map<String, dynamic> stock) { // <- ADDED TYPES
     if(stock['qty'] <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Out of stock')));
       return;
@@ -33,9 +33,11 @@ class _SellPageState extends State<SellPage> {
   }
 
   checkout() async {
-    double total = cart.fold(0, (sum, i)=> sum + (i['qty']*i['price']));
-    await DBHelper.makeSale(cart, total);
-    await printer.printReceipt(cart, total);
+    double total = cart.fold(0.0, (sum, i)=> sum + (i['qty']*i['price'])); // <- 0.0 instead of 0
+    
+    await DBHelper.makeSale(cart, total); // <- cart is now already typed
+    await printer.printReceipt(cart, total); // <- cart is now already typed
+    
     cart.clear();
     widget.onSale();
     setState((){});
@@ -44,7 +46,7 @@ class _SellPageState extends State<SellPage> {
 
   @override
   Widget build(BuildContext context) {
-    double total = cart.fold(0, (sum, i)=> sum + (i['qty']*i['price']));
+    double total = cart.fold(0.0, (sum, i)=> sum + (i['qty']*i['price'])); // <- 0.0 instead of 0
     return Scaffold(
       appBar: AppBar(title: Text('New Sale'), backgroundColor: Colors.orange),
       body: Column(children:[
