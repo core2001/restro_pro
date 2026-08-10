@@ -16,8 +16,8 @@ dependencies:
   flutter_bluetooth_serial_plus: ^0.5.1
   esc_pos_utils: ^1.1.0
   pdf: 3.10.4
-  printing: 5.10.2
-  google_fonts: ^6.2.1
+  printing: ^5.14.3
+  google_fonts: ^4.0.4
   fl_chart: ^0.68.0
   share_plus: ^13.3.0
   image: 3.3.0
