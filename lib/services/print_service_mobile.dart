@@ -1,17 +1,17 @@
-import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial.dart';
-import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:flutter_bluetooth_serial_plus/flutter_bluetooth_serial_plus.dart'; // <- FIXED
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart'; // <- FIXED
 
 class PrintService {
-  Future<List<BluetoothDevice>> getDevices() => FlutterBluetoothSerial.instance.getBondedDevices();
+  Future<List<BluetoothDevice>> getDevices() => FlutterBluetoothSerialPlus.instance.getBondedDevices(); // <- FIXED
 
-  Future<void> printReceipt(List<Map> cart, double total) async {
+  Future<void> printReceipt(List<Map<String, dynamic>> cart, double total) async { // <- FIXED
     var devices = await getDevices();
     if(devices.isEmpty) throw 'No paired printer. Pair in Android Settings';
     var printer = devices.firstWhere(
-      (d) => d.name!.toLowerCase().contains('printer'),
+      (d) => (d.name?? '').toLowerCase().contains('printer'), // <- FIXED null safety
       orElse: () => devices.first
     );
-    var connection = await BluetoothConnection.toAddress(printer.address);
+    var connection = await BluetoothConnectionPlus.toAddress(printer.address); // <- FIXED
 
     final profile = await CapabilityProfile.load();
     final generator = Generator(PaperSize.mm80, profile);

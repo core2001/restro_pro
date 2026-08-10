@@ -21,9 +21,9 @@ class DBHelper {
     await db.execute('CREATE TABLE topups(id INTEGER PRIMARY KEY AUTOINCREMENT, stock_id INTEGER, qty REAL, date TEXT)');
   }
 
-  static Future<int> addStock(Map data) => database.then((db)=>db.insert('stocks', data));
+  static Future<int> addStock(Map<String, dynamic> data) => database.then((db)=>db.insert('stocks', data)); // <- FIXED
   static Future<List<Map<String, dynamic>>> getStocks() => database.then((db)=>db.query('stocks'));
-  static Future<int> updateStock(int id, Map data) => database.then((db)=>db.update('stocks', data, where: 'id=?', whereArgs: [id]));
+  static Future<int> updateStock(int id, Map<String, dynamic> data) => database.then((db)=>db.update('stocks', data, where: 'id=?', whereArgs: [id])); // <- FIXED
   static Future<int> deleteStock(int id) => database.then((db)=>db.delete('stocks', where: 'id=?', whereArgs: [id]));
   
   static Future<int> topUpStock(int id, double qty) async {
@@ -32,7 +32,7 @@ class DBHelper {
     return db.insert('topups', {'stock_id': id, 'qty': qty, 'date': DateTime.now().toIso8601String()});
   }
 
-  static Future<int> makeSale(List<Map> items, double total) async {
+  static Future<int> makeSale(List<Map<String, dynamic>> items, double total) async { // <- FIXED
     final db = await database;
     int saleId = await db.insert('sales', {'date': DateTime.now().toIso8601String(), 'total': total});
     for(var item in items){
