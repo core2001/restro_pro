@@ -1,74 +1,73 @@
-import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:esc_pos_utils/esc_pos_utils.dart';
+import 'package:esc_pos_printer/esc_pos_printer.dart';
+import 'package:intl/intl.dart';
 
 class PrintService {
-  Future<List<BluetoothDevice>> getDevices() async {
-    await FlutterBluePlus.turnOn();
-    return await FlutterBluePlus.bondedDevices;
+  static const _printerKey = 'selected_printer_mac';
+
+  Future<void> savePrinter(String macAddress) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_printerKey, macAddress);
   }
 
-  Future<void> printReceipt(List<Map> cart, double total) async {
-    var devices = await getDevices();
-    if (devices.isEmpty) throw 'No paired printer. Pair in Android Settings';
+  Future<String?> getSavedPrinter() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_printerKey);
+  }
 
-    var printer = devices.firstWhere(
-      (d) => d.platformName.toLowerCase().contains('printer'),
-      orElse: () => devices.first
-    );
+  Future<List<ScanResult>> scanPrinters() async {
+    List<ScanResult> results = [];
+    FlutterBluePlus.scanResults.listen((r) => results = r);
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 5));
+    await FlutterBluePlus.stopScan();
+    return results.where((r) => r.device.name.isNotEmpty).toList();
+  }
 
-    await printer.connect(timeout: const Duration(seconds: 15));
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    List<BluetoothService> services = await printer.discoverServices();
-    BluetoothCharacteristic? writeChar;
-
-    for (var service in services) {
-      for (var char in service.characteristics) {
-        if (char.properties.write || char.properties.writeWithoutResponse) {
-          writeChar = char;
-          break;
-        }
-      }
-      if (writeChar != null) break;
+  Future<void> printReceipt(List<Map<String, dynamic>> cart, double total) async {
+    if(await FlutterBluePlus.isOn == false) {
+      throw Exception("Please turn on Bluetooth");
     }
 
-    if (writeChar == null) {
-      await printer.disconnect();
-      throw 'No writable characteristic found';
-    }
+    String? mac = await getSavedPrinter();
+    if(mac == null) throw Exception("No printer selected. Go to Settings > Printer");
 
+    BluetoothDevice device = BluetoothDevice.fromId(mac);
+    await device.connect(timeout: Duration(seconds: 15));
+
+    // Generate ESC/POS bytes
     final profile = await CapabilityProfile.load();
     final generator = Generator(PaperSize.mm80, profile);
     List<int> bytes = [];
 
-    // CORRECT API FOR v2.0.4
-    bytes += generator.text('RESTRO PRO', styles: PosStyles(align: PosAlign.center, bold: true), linesAfter: 1);
-    bytes += generator.text('Harare, ZW', styles: PosStyles(align: PosAlign.center), linesAfter: 1);
+    bytes += generator.text('RESTROPRO', styles: PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2));
+    bytes += generator.text('Harare, ZW', styles: PosStyles(align: PosAlign.center));
+    bytes += generator.text(DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()), styles: PosStyles(align: PosAlign.center));
     bytes += generator.hr();
-    bytes += generator.text(DateTime.now().toString());
-    bytes += generator.hr();
-
-    for(var item in cart){
-      bytes += generator.row([
-        PosColumn(text: item['name'], width: 4),
-        PosColumn(text: '${item['qty']}', width: 1),
-        PosColumn(text: '\$${(item['qty']*item['price']).toStringAsFixed(2)}', width: 3, styles: PosStyles(align: PosAlign.right))
-      ]);
+    
+    for(var item in cart) {
+      double qty = (item['qty'] as num).toDouble();
+      double price = (item['price'] as num).toDouble();
+      bytes += generator.text('${item['name']}', styles: PosStyles());
+      bytes += generator.text('${qty}x \$${price.toStringAsFixed(2)}  = \$${(qty*price).toStringAsFixed(2)}', styles: PosStyles());
     }
+    
     bytes += generator.hr();
-    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyles(bold: true, align: PosAlign.right));
-    bytes += generator.feed(2);
+    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyles(bold: true, height: PosTextSize.size1));
     bytes += generator.cut();
 
-    const int chunkSize = 20;
-    for (int i = 0; i < bytes.length; i += chunkSize) {
-      final end = (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
-      await writeChar.write(bytes.sublist(i, end), withoutResponse: true);
-      await Future.delayed(const Duration(milliseconds: 20));
+    // Send to printer
+    var mtu = await device.mtu.first;
+    List<List<int>> chunks = [];
+    for (var i = 0; i < bytes.length; i += mtu) {
+      chunks.add(bytes.sublist(i, i + mtu > bytes.length ? bytes.length : i + mtu));
+    }
+    for (var chunk in chunks) {
+      await device.writeCharacteristic(chunk, withoutResponse: true);
     }
 
-    await Future.delayed(const Duration(milliseconds: 500));
-    await printer.disconnect();
+    await Future.delayed(Duration(seconds: 1));
+    await device.disconnect();
   }
 }

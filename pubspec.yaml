@@ -15,10 +15,11 @@ dependencies:
   intl: ^0.20.3
   flutter_blue_plus: ^1.35.3
   esc_pos_utils_plus: ^2.0.4
+  shared_preferences: ^2.2.3
   pdf: ^3.11.3
   printing: ^5.12.2
   google_fonts: ^6.2.1
-  fl_chart: ^0.68.0
+  fl_chart: ^0.70.2
   share_plus: ^13.3.0
   image: ^4.3.0
  

@@ -117,6 +117,12 @@ class _SellPageState extends State<SellPage> {
         title: Text('New Sale', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)), 
         backgroundColor: Colors.orange,
         elevation: 0,
+        actions: [
+  IconButton(
+    icon: Icon(Icons.settings_bluetooth),
+    onPressed: ()=> Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterSettingsPage()))
+  )
+]
       ),
       body: loading 
        ? const Center(child: CircularProgressIndicator(color: Colors.orange))
