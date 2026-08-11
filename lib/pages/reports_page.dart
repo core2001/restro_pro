@@ -15,9 +15,9 @@ class ReportsPage extends StatefulWidget {
 }
 
 class _ReportsPageState extends State<ReportsPage> {
-  List stocks = [];
-  List sales = [];
-  List topups = [];
+  List<Map<String, dynamic>> stocks = []; // <- ADDED TYPES
+  List<Map<String, dynamic>> sales = [];  // <- ADDED TYPES
+  List<Map<String, dynamic>> topups = []; // <- ADDED TYPES
   double revenue = 0;
   bool loading = true;
 
@@ -27,7 +27,7 @@ class _ReportsPageState extends State<ReportsPage> {
     load();
   }
 
-  load() async {
+  Future<void> load() async { // <- FIXED: return type for RefreshIndicator
     setState(() => loading = true);
     stocks = await DBHelper.getStocks();
     sales = await DBHelper.getSales();
@@ -105,7 +105,7 @@ class _ReportsPageState extends State<ReportsPage> {
       body: loading 
         ? const Center(child: CircularProgressIndicator(color: Colors.orange))
         : RefreshIndicator(
-          onRefresh: load,
+          onRefresh: load, // <- now works because load returns Future<void>
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -129,12 +129,12 @@ class _ReportsPageState extends State<ReportsPage> {
               Text('Stock Details', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
               // Group each stock with its details
-              ...stocks.map((s) => _stockCard(s)),
+              ...stocks.map((s) => _stockCard(s as Map<String, dynamic>)), // <- CAST
 
               const SizedBox(height: 24),
               Text('Sales History', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
-              ...sales.map((s) => Card(
+              ...sales.map((s) => Card( // <- s is now typed
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
                   leading: const Icon(Icons.receipt_long, color: Colors.green),
@@ -149,7 +149,7 @@ class _ReportsPageState extends State<ReportsPage> {
     );
   }
 
-  Widget _stockCard(Map s) {
+  Widget _stockCard(Map<String, dynamic> s) { // <- ADDED TYPES
     double qty = (s['qty'] as num).toDouble();
     double price = (s['unit_price'] as num).toDouble();
     double lowAlert = (s['low_alert'] as num).toDouble();
