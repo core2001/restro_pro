@@ -163,7 +163,7 @@ class _StocksPageState extends State<StocksPage> {
     bool low = qty <= (s['low_alert'] as num).toDouble();
 
     return GestureDetector(
-      onTap: ()=> Navigator.push(context, MaterialPageRoute(builder: ()=>StockStatsPage(stock: s))),
+    onTap: ()=> Navigator.push(context, MaterialPageRoute(builder: (context)=>StockStatsPage(stock: s))),
       child: Card(
         margin: EdgeInsets.only(bottom: 12),
         elevation: 3,

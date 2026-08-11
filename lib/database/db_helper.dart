@@ -117,7 +117,7 @@ class DBHelper {
     var stockList = await db.query('stocks', where: 'id=?', whereArgs: [id]);
     if(stockList.isNotEmpty) {
       var stock = stockList.first;
-      double initial = (stock['initial_qty']?? stock['qty'] as num).toDouble();
+      double initial = ((stock['initial_qty']?? stock['qty']) as num).toDouble();
       double current = (stock['qty'] as num).toDouble();
       double soldQty = initial - current;
       double revenueToDeduct = soldQty * (stock['unit_price'] as num).toDouble();
