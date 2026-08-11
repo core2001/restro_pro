@@ -15,8 +15,8 @@ dependencies:
   intl: ^0.20.3
   flutter_bluetooth_serial:
     git:
-      url: https://github.com/Sabbir-Shanto/flutter_bluetooth_serial
-      ref: main
+      url: https://github.com/renanfernandescabral/flutter_bluetooth_serial
+      ref: null_safety
   esc_pos_utils_plus: ^2.0.4
   pdf: ^3.11.3
   printing: ^5.12.2
