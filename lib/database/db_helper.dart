@@ -41,6 +41,11 @@ class DBHelper {
     }
     return saleId;
   }
+  static Future updateStockQty(int id, double newQty) async {
+      final db = await database;
+        await db.update('stocks', {'qty': newQty}, where: 'id =?', whereArgs: [id]);
+        }
+  }
 
   static Future<List<Map<String, dynamic>>> getSales() => database.then((db)=>db.query('sales', orderBy: 'id DESC'));
   static Future<List<Map<String, dynamic>>> getTopUps() => database.then((db)=>db.query('topups', orderBy: 'id DESC'));
