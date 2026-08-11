@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../database/db_helper.dart';
-import 'printer_settings_page. dart';
+import 'printer_settings_page.dart';
 import '../services/print_service_mobile.dart';
 
 class SellPage extends StatefulWidget {
