@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart'; // note _plus
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 
 class PrintService {
   Future<List<BluetoothDevice>> getDevices() async {
@@ -42,9 +42,9 @@ class PrintService {
     final generator = Generator(PaperSize.mm80, profile);
     List<int> bytes = [];
 
-    // FIXED: PosStyle instead of PosStyles, and use size1/size2
-    bytes += generator.text('RESTRO PRO', styles: PosStyle(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2));
-    bytes += generator.text('Harare, ZW', styles: PosStyle(align: PosAlign.center));
+    // CORRECT API FOR v2.0.4
+    bytes += generator.text('RESTRO PRO', styles: PosStyles(align: PosAlign.center, bold: true), linesAfter: 1);
+    bytes += generator.text('Harare, ZW', styles: PosStyles(align: PosAlign.center), linesAfter: 1);
     bytes += generator.hr();
     bytes += generator.text(DateTime.now().toString());
     bytes += generator.hr();
@@ -53,11 +53,11 @@ class PrintService {
       bytes += generator.row([
         PosColumn(text: item['name'], width: 4),
         PosColumn(text: '${item['qty']}', width: 1),
-        PosColumn(text: '\$${(item['qty']*item['price']).toStringAsFixed(2)}', width: 3, styles: PosStyle(align: PosAlign.right))
+        PosColumn(text: '\$${(item['qty']*item['price']).toStringAsFixed(2)}', width: 3, styles: PosStyles(align: PosAlign.right))
       ]);
     }
     bytes += generator.hr();
-    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyle(bold: true, align: PosAlign.right, height: PosTextSize.size1));
+    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyles(bold: true, align: PosAlign.right));
     bytes += generator.feed(2);
     bytes += generator.cut();
 
