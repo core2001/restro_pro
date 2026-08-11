@@ -161,6 +161,7 @@ class _SellPageState extends State<SellPage> {
                         )
                       )).toList()
                 ),
+                ), 
               ]),
             ),
             
