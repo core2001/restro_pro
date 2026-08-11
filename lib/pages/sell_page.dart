@@ -128,7 +128,7 @@ class _SellPageState extends State<SellPage> {
                 crossAxisCount: 2, 
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                children: stocks.map((s) => _productCard(s)).toList() // s is now typed
+                children: stocks.map((s) => _productCard(s)).toList()
               )
             ),
             
@@ -191,11 +191,11 @@ class _SellPageState extends State<SellPage> {
                 ],
               )
             )
-          ]),
+          ]), // <- ADDED THIS: ] to close children and ) to close Column
     );
   }
 
-  Widget _productCard(Map<String, dynamic> s) { // <- FIXED TYPE
+  Widget _productCard(Map<String, dynamic> s) {
     double qty = (s['qty'] as num).toDouble();
     bool outOfStock = qty <= 0;
     return Card(
