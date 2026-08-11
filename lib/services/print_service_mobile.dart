@@ -1,7 +1,6 @@
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:esc_pos_utils/esc_pos_utils.dart';
-import 'package:esc_pos_printer/esc_pos_printer.dart';
 import 'package:intl/intl.dart';
 
 class PrintService {
@@ -33,8 +32,25 @@ class PrintService {
     String? mac = await getSavedPrinter();
     if(mac == null) throw Exception("No printer selected. Go to Settings > Printer");
 
-    BluetoothDevice device = BluetoothDevice.fromId(mac);
+    BluetoothDevice device = BluetoothDevice(remoteId: DeviceIdentifier(mac));
     await device.connect(timeout: Duration(seconds: 15));
+    List<BluetoothService> services = await device.discoverServices();
+
+    // Find writable characteristic
+    BluetoothCharacteristic? characteristic;
+    for (var service in services) {
+      for (var c in service.characteristics) {
+        if(c.properties.write || c.properties.writeWithoutResponse) {
+          characteristic = c;
+          break;
+        }
+      }
+      if(characteristic != null) break;
+    }
+    if(characteristic == null) {
+      await device.disconnect();
+      throw Exception("Printer not supported - no write characteristic found");
+    }
 
     // Generate ESC/POS bytes
     final profile = await CapabilityProfile.load();
@@ -49,22 +65,21 @@ class PrintService {
     for(var item in cart) {
       double qty = (item['qty'] as num).toDouble();
       double price = (item['price'] as num).toDouble();
-      bytes += generator.text('${item['name']}', styles: PosStyles());
-      bytes += generator.text('${qty}x \$${price.toStringAsFixed(2)}  = \$${(qty*price).toStringAsFixed(2)}', styles: PosStyles());
+      bytes += generator.text('${item['name']}');
+      bytes += generator.text('${qty}x \$${price.toStringAsFixed(2)}  = \$${(qty*price).toStringAsFixed(2)}');
     }
     
     bytes += generator.hr();
-    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyles(bold: true, height: PosTextSize.size1));
+    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyles(bold: true));
+    bytes += generator.feed(2);
     bytes += generator.cut();
 
-    // Send to printer
-    var mtu = await device.mtu.first;
-    List<List<int>> chunks = [];
-    for (var i = 0; i < bytes.length; i += mtu) {
-      chunks.add(bytes.sublist(i, i + mtu > bytes.length ? bytes.length : i + mtu));
-    }
-    for (var chunk in chunks) {
-      await device.writeCharacteristic(chunk, withoutResponse: true);
+    // Send in chunks - FIX: use characteristic.write()
+    int chunkSize = 20;
+    for (var i = 0; i < bytes.length; i += chunkSize) {
+      int end = (i + chunkSize > bytes.length) ? bytes.length : i + chunkSize;
+      await characteristic.write(bytes.sublist(i, end), withoutResponse: true);
+      await Future.delayed(Duration(milliseconds: 50));
     }
 
     await Future.delayed(Duration(seconds: 1));
