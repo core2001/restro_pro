@@ -15,9 +15,9 @@ class ReportsPage extends StatefulWidget {
 }
 
 class _ReportsPageState extends State<ReportsPage> {
-  List<Map<String, dynamic>> stocks = []; // <- ADDED TYPES
-  List<Map<String, dynamic>> sales = [];  // <- ADDED TYPES
-  List<Map<String, dynamic>> topups = []; // <- ADDED TYPES
+  List<Map<String, dynamic>> stocks = [];
+  List<Map<String, dynamic>> sales = [];
+  List<Map<String, dynamic>> topups = [];
   double revenue = 0;
   bool loading = true;
 
@@ -27,7 +27,7 @@ class _ReportsPageState extends State<ReportsPage> {
     load();
   }
 
-  Future<void> load() async { // <- FIXED: return type for RefreshIndicator
+  Future<void> load() async {
     setState(() => loading = true);
     stocks = await DBHelper.getStocks();
     sales = await DBHelper.getSales();
@@ -44,10 +44,7 @@ class _ReportsPageState extends State<ReportsPage> {
     pdf.addPage(pw.MultiPage(
       pageTheme: pw.PageTheme(theme: pw.ThemeData.withFont(base: font, bold: fontBold)),
       build: (context) => [
-        pw.Header(
-          level: 0,
-          child: pw.Text('RestroPro Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold))
-        ),
+        pw.Header(level: 0, child: pw.Text('RestroPro Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold))),
         pw.Text('Harare, ZW • ${DateTime.now().toString().substring(0,16)}'),
         pw.Divider(),
         pw.Text('Total Revenue: \$${revenue.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
@@ -62,13 +59,7 @@ class _ReportsPageState extends State<ReportsPage> {
             double price = (s['unit_price'] as num).toDouble();
             double lowAlert = (s['low_alert'] as num).toDouble();
             String status = qty <= lowAlert ? 'LOW' : 'OK';
-            return [
-              s['name'], 
-              qty.toString(), 
-              '\$${price.toStringAsFixed(2)}',
-              '\$${(qty * price).toStringAsFixed(2)}',
-              status
-            ];
+            return [s['name'], qty.toString(), '\$${price.toStringAsFixed(2)}', '\$${(qty * price).toStringAsFixed(2)}', status];
           }).toList(),
           headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           cellAlignment: pw.Alignment.centerLeft,
@@ -79,7 +70,7 @@ class _ReportsPageState extends State<ReportsPage> {
         pw.SizedBox(height: 10),
         pw.Table.fromTextArray(
           headers: ['Date', 'Total'],
-          data: sales.map((s)=>[s['date'].toString().substring(0,16), '\$${(s['total'] as num).toStringAsFixed(2)}']).toList(),
+          data: sales.map((s)=>[s['date'].toString().substring(0,16), '\$${(s['total'] as num).toDouble().toStringAsFixed(2)}']).toList(),
         )
       ]
     ));
@@ -98,18 +89,15 @@ class _ReportsPageState extends State<ReportsPage> {
         title: Text('Reports', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)), 
         backgroundColor: Colors.orange, 
         elevation: 0,
-        actions:[
-          IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: generatePDF, tooltip: 'Export PDF')
-        ]
+        actions:[ IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: generatePDF, tooltip: 'Export PDF') ]
       ),
       body: loading 
         ? const Center(child: CircularProgressIndicator(color: Colors.orange))
         : RefreshIndicator(
-          onRefresh: load, // <- now works because load returns Future<void>
+          onRefresh: load,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // Revenue Summary Card
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -128,18 +116,17 @@ class _ReportsPageState extends State<ReportsPage> {
 
               Text('Stock Details', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
-              // Group each stock with its details
-              ...stocks.map((s) => _stockCard(s as Map<String, dynamic>)), // <- CAST
+              ...stocks.map((s) => _stockCard(s)), // s is typed
 
               const SizedBox(height: 24),
               Text('Sales History', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
-              ...sales.map((s) => Card( // <- s is now typed
+              ...sales.map((s) => Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
                   leading: const Icon(Icons.receipt_long, color: Colors.green),
                   title: Text(s['date'].toString().substring(0,16)),
-                  trailing: Text('\$${(s['total'] as num).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: Text('\$${(s['total'] as num).toDouble().toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               )),
               const SizedBox(height: 40),
@@ -149,7 +136,7 @@ class _ReportsPageState extends State<ReportsPage> {
     );
   }
 
-  Widget _stockCard(Map<String, dynamic> s) { // <- ADDED TYPES
+  Widget _stockCard(Map<String, dynamic> s) {
     double qty = (s['qty'] as num).toDouble();
     double price = (s['unit_price'] as num).toDouble();
     double lowAlert = (s['low_alert'] as num).toDouble();
@@ -174,8 +161,7 @@ class _ReportsPageState extends State<ReportsPage> {
                     color: isLow ? Colors.red.shade100 : Colors.green.shade100,
                     borderRadius: BorderRadius.circular(20)
                   ),
-                  child: Text(
-                    isLow ? 'LOW STOCK' : 'IN STOCK',
+                  child: Text(isLow ? 'LOW STOCK' : 'IN STOCK',
                     style: TextStyle(color: isLow ? Colors.red.shade800 : Colors.green.shade800, fontSize: 11, fontWeight: FontWeight.bold)
                   ),
                 )
@@ -185,14 +171,14 @@ class _ReportsPageState extends State<ReportsPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _detailItem('Quantity', '${qty.toString()}'),
+                _detailItem('Quantity', '$qty'),
                 _detailItem('Unit Price', '\$${price.toStringAsFixed(2)}'),
                 _detailItem('Value', '\$${(qty * price).toStringAsFixed(2)}'),
               ],
             ),
             if (isLow) ...[
               const SizedBox(height: 8),
-              Text('Alert at: ${lowAlert.toString()}', style: TextStyle(color: Colors.red.shade700, fontSize: 12))
+              Text('Alert at: $lowAlert', style: TextStyle(color: Colors.red.shade700, fontSize: 12))
             ]
           ],
         ),

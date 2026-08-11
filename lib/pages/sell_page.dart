@@ -29,7 +29,8 @@ class _SellPageState extends State<SellPage> {
   }
 
   addToCart(Map<String, dynamic> stock) {
-    if((stock['qty'] as double) <= 0) {
+    double stockQty = (stock['qty'] as num).toDouble();
+    if(stockQty <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${stock['name']} is Out of Stock'), backgroundColor: Colors.red)
       );
@@ -42,24 +43,26 @@ class _SellPageState extends State<SellPage> {
           'stock_id': stock['id'], 
           'name': stock['name'], 
           'qty': 1.0, 
-          'price': stock['unit_price']
+          'price': (stock['unit_price'] as num).toDouble()
         });
       }
       else {
-        if(existing.first['qty'] >= stock['qty']) {
+        double existingQty = (existing.first['qty'] as num).toDouble();
+        if(existingQty >= stockQty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Not enough stock'), backgroundColor: Colors.orange)
           );
           return;
         }
-        existing.first['qty'] += 1.0;
+        existing.first['qty'] = existingQty + 1.0;
       }
     });
   }
 
   removeFromCart(Map<String, dynamic> item) {
     setState((){
-      if(item['qty'] > 1) item['qty'] -= 1.0;
+      double qty = (item['qty'] as num).toDouble();
+      if(qty > 1) item['qty'] = qty - 1.0;
       else cart.remove(item);
     });
   }
@@ -70,7 +73,6 @@ class _SellPageState extends State<SellPage> {
       barrierDismissible: false,
       builder: (_) => _ReceiptDialog(cart: cart, total: total)
     );
-    // Auto close after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       if(mounted) Navigator.of(context).pop();
     });
@@ -78,22 +80,18 @@ class _SellPageState extends State<SellPage> {
 
   checkout() async {
     if(cart.isEmpty) return;
-    double total = cart.fold(0.0, (sum, i)=> sum + (i['qty']*i['price']));
+    double total = cart.fold(0.0, (sum, i)=> sum + ((i['qty'] as num)*(i['price'] as num)));
     
-    // 1. Save sale
     await DBHelper.makeSale(cart, total); 
     
-    // 2. Deduct stock qty for each item
     for(var item in cart) {
       var stock = stocks.firstWhere((s) => s['id'] == item['stock_id']);
-      double newQty = (stock['qty'] as double) - (item['qty'] as double);
-      await DBHelper.updateStockQty(stock['id'], newQty);
+      double newQty = (stock['qty'] as num).toDouble() - (item['qty'] as num).toDouble();
+      await DBHelper.updateStockQty(stock['id'] as int, newQty);
     }
     
-    // 3. Show Pro Receipt on screen
     showReceiptDialog(total);
     
-    // 4. Print receipt
     try {
       await printer.printReceipt(cart, total);
     } catch(e) {
@@ -112,7 +110,7 @@ class _SellPageState extends State<SellPage> {
 
   @override
   Widget build(BuildContext context) {
-    double total = cart.fold(0.0, (sum, i)=> sum + (i['qty']*i['price']));
+    double total = cart.fold(0.0, (sum, i)=> sum + ((i['qty'] as num)*(i['price'] as num)));
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       appBar: AppBar(
@@ -130,7 +128,7 @@ class _SellPageState extends State<SellPage> {
                 crossAxisCount: 2, 
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                children: stocks.map((s) => _productCard(s)).toList()
+                children: stocks.map((s) => _productCard(s)).toList() // s is now typed
               )
             ),
             
@@ -152,12 +150,12 @@ class _SellPageState extends State<SellPage> {
                     : ListView(children: cart.map((i) => ListTile(
                         dense: true,
                         title: Text(i['name']), 
-                        subtitle: Text('\$${(i['price'] as double).toStringAsFixed(2)} each'),
+                        subtitle: Text('\$${(i['price'] as num).toDouble().toStringAsFixed(2)} each'),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(icon: Icon(Icons.remove_circle_outline, size: 20), onPressed: ()=>removeFromCart(i)),
-                            Text('${i['qty']}', style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text('${(i['qty'] as num).toDouble()}', style: TextStyle(fontWeight: FontWeight.bold)),
                             IconButton(icon: Icon(Icons.add_circle_outline, size: 20), onPressed: ()=>addToCart(stocks.firstWhere((s)=>s['id']==i['stock_id']))),
                           ],
                         )
@@ -197,8 +195,8 @@ class _SellPageState extends State<SellPage> {
     );
   }
 
-  Widget _productCard(Map s) {
-    double qty = (s['qty'] as double);
+  Widget _productCard(Map<String, dynamic> s) { // <- FIXED TYPE
+    double qty = (s['qty'] as num).toDouble();
     bool outOfStock = qty <= 0;
     return Card(
       elevation: 2,
@@ -215,7 +213,7 @@ class _SellPageState extends State<SellPage> {
               const SizedBox(height: 8),
               Text(s['name'], textAlign: TextAlign.center, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
-              Text('\$${(s['unit_price'] as double).toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700)),
+              Text('\$${(s['unit_price'] as num).toDouble().toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700)),
               const SizedBox(height: 4),
               Text(
                 'Left: $qty', 
@@ -234,7 +232,6 @@ class _SellPageState extends State<SellPage> {
 }
 
 
-/// PRO RECEIPT DIALOG
 class _ReceiptDialog extends StatelessWidget {
   final List<Map<String, dynamic>> cart;
   final double total;
@@ -262,16 +259,15 @@ class _ReceiptDialog extends StatelessWidget {
             const SizedBox(height: 12),
             Divider(thickness: 1, color: Colors.grey.shade300),
             
-            // Items
             ...cart.map((item) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(child: Text('${item['name']}', style: GoogleFonts.poppins(fontSize: 13))),
-                  Text('${item['qty']} x \$${(item['price'] as double).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 13)),
+                  Text('${(item['qty'] as num).toDouble()} x \$${(item['price'] as num).toDouble().toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 13)),
                   const SizedBox(width: 8),
-                  Text('\$${((item['qty'] as double)*(item['price'] as double)).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text('\$${((item['qty'] as num).toDouble()*(item['price'] as num).toDouble()).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
             )),
