@@ -12,11 +12,11 @@ dependencies:
   sqflite: ^2.4.3
   path: ^1.9.1
   path_provider: ^2.1.6
-  intl: ^0.20.3
-  flutter_bluetooth_serial:
+  iflutter_bluetooth_serial:
     git:
-      url: https://github.com/renanfernandescabral/flutter_bluetooth_serial
-      ref: null_safety
+      url: https://github.com/Saravanan-Kandasamy/flutter_bluetooth_serial.git
+      ref: masterntl: 
+  intl: ^0.20.3
   esc_pos_utils_plus: ^2.0.4
   pdf: ^3.11.3
   printing: ^5.12.2
