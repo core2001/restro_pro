@@ -37,11 +37,16 @@ class _ReportsPageState extends State<ReportsPage> {
     setState(() => loading = false);
   }
 
-  // NEW: Show receipt popup for 6 seconds
+  // UPDATED: Show receipt popup for 6 seconds with stock names
   Future<void> _showReceiptPopup(Map<String, dynamic> sale) async {
     final db = await DBHelper.database;
-    // Get items for this sale
-    final items = await db.query('sale_items', where: 'sale_id =?', whereArgs: [sale['id']]);
+    // Get items for this sale + join stock name
+    final items = await db.rawQuery('''
+      SELECT si.qty, si.price, s.name 
+      FROM sale_items si 
+      JOIN stocks s ON si.stock_id = s.id 
+      WHERE si.sale_id = ?
+    ''', [sale['id']]);
     
     showDialog(
       context: context,
@@ -73,13 +78,15 @@ class _ReportsPageState extends State<ReportsPage> {
                 ...items.map((item) {
                   double qty = (item['qty'] as num).toDouble();
                   double price = (item['price'] as num).toDouble();
+                  String name = item['name'].toString();
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(child: Text('Qty: $qty')),
-                        Text('\$${(qty * price).toStringAsFixed(2)}'),
+                        Expanded(child: Text(name, style: GoogleFonts.poppins(fontSize: 13))), // <- STOCK NAME
+                        Text('${qty}x \$${price.toStringAsFixed(2)} = \$${(qty * price).toStringAsFixed(2)}', 
+                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600)),
                       ],
                     ),
                   );

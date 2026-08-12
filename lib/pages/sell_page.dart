@@ -45,7 +45,7 @@ class _SellPageState extends State<SellPage> {
           'name': stock['name'], 
           'qty': 1.0, 
           'price': (stock['unit_price'] as num).toDouble(),
-          'low_alert': (stock['low_alert'] as num).toDouble() // <- Added for quality check
+          'low_alert': (stock['low_alert'] as num).toDouble()
         });
       }
       else {
@@ -69,11 +69,12 @@ class _SellPageState extends State<SellPage> {
     });
   }
 
-  showReceiptDialog(double total) {
+  // UPDATED: accept cart copy
+  showReceiptDialog(double total, List<Map<String, dynamic>> cartToShow) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _ReceiptDialog(cart: cart, total: total)
+      builder: (_) => _ReceiptDialog(cart: cartToShow, total: total)
     );
     Future.delayed(const Duration(seconds: 3), () {
       if(mounted) Navigator.of(context).pop();
@@ -92,10 +93,12 @@ class _SellPageState extends State<SellPage> {
       await DBHelper.updateStockQty(stock['id'] as int, newQty);
     }
     
-    showReceiptDialog(total);
+    // MAKE A COPY before we clear cart
+    final cartCopy = List<Map<String, dynamic>>.from(cart.map((e) => Map<String, dynamic>.from(e)));
+    showReceiptDialog(total, cartCopy); // pass copy to dialog
     
     try {
-      await printer.printReceipt(cart, total);
+      await printer.printReceipt(cartCopy, total); // also use copy for printing
     } catch(e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sale saved. Print failed: $e'), backgroundColor: Colors.orange)
@@ -103,7 +106,7 @@ class _SellPageState extends State<SellPage> {
     }
     
     setState((){
-      cart.clear();
+      cart.clear(); // now safe
       loading = true;
     });
     await loadStocks();
@@ -273,7 +276,6 @@ class _ReceiptDialog extends StatelessWidget {
               double price = (item['price'] as num).toDouble();
               double lowAlert = (item['low_alert'] as num?)?.toDouble() ?? 0;
               
-              // "Quality" = Stock Status based on low_alert
               String quality = qty > lowAlert * 2 ? 'Good' : qty > lowAlert ? 'OK' : 'Low';
               Color qualityColor = quality == 'Good' ? Colors.green : quality == 'OK' ? Colors.orange : Colors.red;
 
