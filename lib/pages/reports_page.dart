@@ -37,10 +37,10 @@ class _ReportsPageState extends State<ReportsPage> {
     setState(() => loading = false);
   }
 
-  // UPDATED: Show receipt popup for 6 seconds with stock names
+  // UPDATED: Show receipt with stock names
   Future<void> _showReceiptPopup(Map<String, dynamic> sale) async {
     final db = await DBHelper.database;
-    // Get items for this sale + join stock name
+    // JOIN to get stock name
     final items = await db.rawQuery('''
       SELECT si.qty, si.price, s.name 
       FROM sale_items si 
@@ -50,9 +50,8 @@ class _ReportsPageState extends State<ReportsPage> {
     
     showDialog(
       context: context,
-      barrierDismissible: false, // Can't dismiss manually
+      barrierDismissible: false,
       builder: (context) {
-        // Auto close after 6 seconds
         Timer(const Duration(seconds: 6), () {
           if(Navigator.canPop(context)) Navigator.pop(context);
         });
@@ -66,7 +65,10 @@ class _ReportsPageState extends State<ReportsPage> {
               const Icon(Icons.receipt_long, size: 40, color: Colors.orange),
               const SizedBox(height: 8),
               Text('Receipt', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-              Text(sale['date'].toString().substring(0,16), style: const TextStyle(fontSize: 12, color: Colors.grey))
+              Text(
+                sale['date'].toString().substring(0,16), 
+                style: const TextStyle(fontSize: 12, color: Colors.grey)
+              )
             ],
           ),
           content: SizedBox(
@@ -81,12 +83,17 @@ class _ReportsPageState extends State<ReportsPage> {
                   String name = item['name'].toString();
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: Text(name, style: GoogleFonts.poppins(fontSize: 13))), // <- STOCK NAME
-                        Text('${qty}x \$${price.toStringAsFixed(2)} = \$${(qty * price).toStringAsFixed(2)}', 
-                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600)),
+                        Text(name, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)), // <- NAME
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)),
+                            Text('\$${(qty * price).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                       ],
                     ),
                   );
