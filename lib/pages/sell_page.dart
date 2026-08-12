@@ -44,7 +44,8 @@ class _SellPageState extends State<SellPage> {
           'stock_id': stock['id'], 
           'name': stock['name'], 
           'qty': 1.0, 
-          'price': (stock['unit_price'] as num).toDouble()
+          'price': (stock['unit_price'] as num).toDouble(),
+          'low_alert': (stock['low_alert'] as num).toDouble() // <- Added for quality check
         });
       }
       else {
@@ -119,11 +120,11 @@ class _SellPageState extends State<SellPage> {
         backgroundColor: Colors.orange,
         elevation: 0,
         actions: [
-  IconButton(
-    icon: Icon(Icons.settings_bluetooth),
-    onPressed: ()=> Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterSettingsPage()))
-  )
-]
+          IconButton(
+            icon: Icon(Icons.settings_bluetooth),
+            onPressed: ()=> Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterSettingsPage()))
+          )
+        ]
       ),
       body: loading 
        ? const Center(child: CircularProgressIndicator(color: Colors.orange))
@@ -199,7 +200,7 @@ class _SellPageState extends State<SellPage> {
                 ],
               )
             )
-          ]), // <- ADDED THIS: ] to close children and ) to close Column
+          ]),
     );
   }
 
@@ -267,18 +268,43 @@ class _ReceiptDialog extends StatelessWidget {
             const SizedBox(height: 12),
             Divider(thickness: 1, color: Colors.grey.shade300),
             
-            ...cart.map((item) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: Text('${item['name']}', style: GoogleFonts.poppins(fontSize: 13))),
-                  Text('${(item['qty'] as num).toDouble()} x \$${(item['price'] as num).toDouble().toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 13)),
-                  const SizedBox(width: 8),
-                  Text('\$${((item['qty'] as num).toDouble()*(item['price'] as num).toDouble()).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            )),
+            ...cart.map((item) {
+              double qty = (item['qty'] as num).toDouble();
+              double price = (item['price'] as num).toDouble();
+              double lowAlert = (item['low_alert'] as num?)?.toDouble() ?? 0;
+              
+              // "Quality" = Stock Status based on low_alert
+              String quality = qty > lowAlert * 2 ? 'Good' : qty > lowAlert ? 'OK' : 'Low';
+              Color qualityColor = quality == 'Good' ? Colors.green : quality == 'OK' ? Colors.orange : Colors.red;
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: Text('${item['name']}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600))),
+                        Text('\$${(qty * price).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: qualityColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                          child: Text('Stock: $quality', style: TextStyle(fontSize: 10, color: qualityColor, fontWeight: FontWeight.w600))
+                        )
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
             
             Divider(thickness: 1, color: Colors.grey.shade300),
             Row(

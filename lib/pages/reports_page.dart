@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
+import 'dart:async';
 import '../database/db_helper.dart';
 
 class ReportsPage extends StatefulWidget {
@@ -34,6 +35,71 @@ class _ReportsPageState extends State<ReportsPage> {
     topups = await DBHelper.getTopUps();
     revenue = await DBHelper.getTotalRevenue();
     setState(() => loading = false);
+  }
+
+  // NEW: Show receipt popup for 6 seconds
+  Future<void> _showReceiptPopup(Map<String, dynamic> sale) async {
+    final db = await DBHelper.database;
+    // Get items for this sale
+    final items = await db.query('sale_items', where: 'sale_id =?', whereArgs: [sale['id']]);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Can't dismiss manually
+      builder: (context) {
+        // Auto close after 6 seconds
+        Timer(const Duration(seconds: 6), () {
+          if(Navigator.canPop(context)) Navigator.pop(context);
+        });
+
+        double total = (sale['total'] as num).toDouble();
+        
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Column(
+            children: [
+              const Icon(Icons.receipt_long, size: 40, color: Colors.orange),
+              const SizedBox(height: 8),
+              Text('Receipt', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+              Text(sale['date'].toString().substring(0,16), style: const TextStyle(fontSize: 12, color: Colors.grey))
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Divider(),
+                ...items.map((item) {
+                  double qty = (item['qty'] as num).toDouble();
+                  double price = (item['price'] as num).toDouble();
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(child: Text('Qty: $qty')),
+                        Text('\$${(qty * price).toStringAsFixed(2)}'),
+                      ],
+                    ),
+                  );
+                }),
+                const Divider(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('TOTAL', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text('\$${total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text('Auto closing in 6s...', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   generatePDF() async {
@@ -116,7 +182,7 @@ class _ReportsPageState extends State<ReportsPage> {
 
               Text('Stock Details', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
-              ...stocks.map((s) => _stockCard(s)), // s is typed
+              ...stocks.map((s) => _stockCard(s)),
 
               const SizedBox(height: 24),
               Text('Sales History', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
@@ -124,6 +190,7 @@ class _ReportsPageState extends State<ReportsPage> {
               ...sales.map((s) => Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: ListTile(
+                  onTap: () => _showReceiptPopup(s), // <- TAP TO SHOW RECEIPT
                   leading: const Icon(Icons.receipt_long, color: Colors.green),
                   title: Text(s['date'].toString().substring(0,16)),
                   trailing: Text('\$${(s['total'] as num).toDouble().toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
