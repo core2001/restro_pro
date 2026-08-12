@@ -241,17 +241,14 @@ class _StockStatsPageState extends State<StockStatsPage> {
 
   String generateFeedback() {
     if(history.isEmpty) return "No data yet. Start selling to see insights.";
-
     double sold = 0;
     double topup = 0;
     for(var h in history) {
       if(h['type'] == 'SALE') sold += (-(h['qty_change'] as num).toDouble());
       if(h['type'] == 'TOPUP') topup += (h['qty_change'] as num).toDouble();
     }
-
     double current = (widget.stock['qty'] as num).toDouble();
     double alert = (widget.stock['low_alert'] as num).toDouble();
-
     if(current <= alert) return "⚠️ URGENT: ${widget.stock['name']} is low on stock. Only ${current.toStringAsFixed(1)} left. Top up now!";
     if(sold > topup * 2) return "🔥 HOT ITEM: ${widget.stock['name']} sold ${sold.toStringAsFixed(0)}. Demand is high. Increase stock!";
     if(sold < 5 && topup > 20) return "📉 SLOW MOVER: ${widget.stock['name']} isn't selling. Consider a discount or combo.";
@@ -264,7 +261,6 @@ class _StockStatsPageState extends State<StockStatsPage> {
     double initial = (widget.stock['initial_qty']?? current) as double;
     double sold = initial - current;
 
-    // Line chart data
     List<FlSpot> stockSpots = [];
     List<FlSpot> saleSpots = [];
     for(int i=0; i<history.length; i++) {
@@ -275,7 +271,6 @@ class _StockStatsPageState extends State<StockStatsPage> {
       }
     }
 
-    // Bar chart data: group by last 7 days
     Map<String, double> salesByDay = {};
     Map<String, double> topupsByDay = {};
     for(var h in history) {
@@ -293,7 +288,7 @@ class _StockStatsPageState extends State<StockStatsPage> {
           Text('Analytics for ${widget.stock['name']}', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold)),
           SizedBox(height: 20),
 
-          // 1. PIE CHART: Stock vs Sold
+          // 1. PIE CHART
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 3,
@@ -309,21 +304,10 @@ class _StockStatsPageState extends State<StockStatsPage> {
                       pieTouchData: PieTouchData(touchCallback: (event, response) {
                         setState(() { touchedPieIndex = response?.touchedSection?.touchedSectionIndex?? -1; });
                       }),
+                      sectionsSpace: 2,
                       sections: [
-                        PieChartSectionData(
-                          color: Colors.orange,
-                          value: current,
-                          title: '${current.toStringAsFixed(0)}',
-                          radius: touchedPieIndex == 0? 60 : 50,
-                          titleStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)
-                        ),
-                        PieChartSectionData(
-                          color: Colors.red.shade400,
-                          value: sold,
-                          title: '${sold.toStringAsFixed(0)}',
-                          radius: touchedPieIndex == 1? 60 : 50,
-                          titleStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)
-                        ),
+                        PieChartSectionData(color: Colors.orange, value: current, title: '${current.toStringAsFixed(0)}', radius: touchedPieIndex == 0? 60 : 50, titleStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                        PieChartSectionData(color: Colors.red.shade400, value: sold, title: '${sold.toStringAsFixed(0)}', radius: touchedPieIndex == 1? 60 : 50, titleStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
                       ],
                       centerSpaceRadius: 30,
                     ),
@@ -340,7 +324,7 @@ class _StockStatsPageState extends State<StockStatsPage> {
           ),
           SizedBox(height: 20),
 
-          // 2. BAR CHART: Sales vs Topups last 7 days
+          // 2. BAR CHART
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 3,
@@ -358,10 +342,12 @@ class _StockStatsPageState extends State<StockStatsPage> {
                       }),
                       titlesData: FlTitlesData(
                         bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, meta) {
-                          if(v.toInt() < last7Days.length) return Text(last7Days[v.toInt()], style: TextStyle(fontSize: 10));
+                          if(v.toInt() < last7Days.length) return Padding(padding: EdgeInsets.only(top: 4), child: Text(last7Days[v.toInt()], style: TextStyle(fontSize: 10)));
                           return Text('');
                         })),
                         leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
+                        rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                       ),
                       borderData: FlBorderData(show: false),
                       barGroups: List.generate(last7Days.length, (i) {
@@ -375,6 +361,7 @@ class _StockStatsPageState extends State<StockStatsPage> {
                           showingTooltipIndicators: touchedBarIndex == i? [0,1] : [],
                         );
                       }),
+                      groupsSpace: 12, // FIX for v0.70.2
                     ),
                   ),
                 ),
@@ -389,7 +376,7 @@ class _StockStatsPageState extends State<StockStatsPage> {
           ),
           SizedBox(height: 20),
 
-          // 3. LINE CHART: Stock Level Over Time
+          // 3. LINE CHART - FIXED BRACKETS
           Text('Stock Level Over Time', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
           SizedBox(height: 12),
           AspectRatio(
@@ -397,17 +384,19 @@ class _StockStatsPageState extends State<StockStatsPage> {
             child: LineChart(
               LineChartData(
                 gridData: FlGridData(show: true),
-                titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 22, getTitlesWidget: (v, meta)=>Text('D${v.toInt()+1}', style: TextStyle(fontSize: 10)))),
-                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
-                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                borderData: FlBorderData(show: true),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 22, getTitlesWidget: (v, meta)=>Text('D${v.toInt()+1}', style: TextStyle(fontSize: 10)))),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: true), // this is correct for LineChartData
                 lineBarsData: [
                   LineChartBarData(spots: stockSpots, isCurved: true, color: Colors.orange, barWidth: 3, dotData: FlDotData(show: false), belowBarData: BarAreaData(show: true, color: Colors.orange.withOpacity(0.2))),
                   LineChartBarData(spots: saleSpots, color: Colors.red, barWidth: 0, dotData: FlDotData(show: true, getDotPainter: (spot, percent, bar, index)=> FlDotCirclePainter(radius: 5, color: Colors.red, strokeWidth: 2, strokeColor: Colors.white))),
                 ]
-              )
-            ),
+              ) // <- this was missing
+            ), // <- and this
           ),
           SizedBox(height: 24),
 
