@@ -225,6 +225,7 @@ class StockStatsPage extends StatefulWidget {
 
 class _StockStatsPageState extends State<StockStatsPage> {
   List<Map<String, dynamic>> history = [];
+  bool loading = true;
   int touchedPieIndex = -1;
   int touchedBarIndex = -1;
 
@@ -236,7 +237,21 @@ class _StockStatsPageState extends State<StockStatsPage> {
 
   loadHistory() async {
     history = await DBHelper.getStockHistory(widget.stock['id']);
-    setState(() {});
+    setState(() => loading = false);
+  }
+
+  DateTime _safeParseDate(dynamic date) {
+    try {
+      if(date is int) {
+        return DateTime.fromMillisecondsSinceEpoch(date);
+      }
+      if(date is String) {
+        return DateTime.parse(date.toString().replaceAll(' ', 'T'));
+      }
+    } catch (e) {
+      print("Date parse error: $e");
+    }
+    return DateTime.now();
   }
 
   String generateFeedback() {
@@ -259,7 +274,7 @@ class _StockStatsPageState extends State<StockStatsPage> {
   Widget build(BuildContext context) {
     double current = (widget.stock['qty'] as num).toDouble();
     double initial = (widget.stock['initial_qty']?? current) as double;
-    double sold = initial - current;
+    double sold = (initial - current).clamp(0, double.infinity);
 
     List<FlSpot> stockSpots = [];
     List<FlSpot> saleSpots = [];
@@ -274,11 +289,13 @@ class _StockStatsPageState extends State<StockStatsPage> {
     Map<String, double> salesByDay = {};
     Map<String, double> topupsByDay = {};
     for(var h in history) {
-      String day = DateFormat('dd/MM').format(DateTime.parse(h['date']));
+      String day = DateFormat('dd/MM').format(_safeParseDate(h['date']));
       if(h['type'] == 'SALE') salesByDay[day] = (salesByDay[day]?? 0) + (-(h['qty_change'] as num).toDouble());
       if(h['type'] == 'TOPUP') topupsByDay[day] = (topupsByDay[day]?? 0) + (h['qty_change'] as num).toDouble();
     }
     List<String> last7Days = salesByDay.keys.toList().reversed.take(7).toList().reversed.toList();
+
+    if(loading) return Scaffold(appBar: AppBar(title: Text(widget.stock['name'])), body: Center(child: CircularProgressIndicator(color: Colors.orange)));
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.stock['name'], style: GoogleFonts.poppins(fontWeight: FontWeight.bold)), backgroundColor: Colors.orange),
@@ -287,142 +304,33 @@ class _StockStatsPageState extends State<StockStatsPage> {
         children: [
           Text('Analytics for ${widget.stock['name']}', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold)),
           SizedBox(height: 20),
-
-          // 1. PIE CHART
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 3,
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Stock Breakdown', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
-                SizedBox(height: 16),
-                AspectRatio(
-                  aspectRatio: 1.3,
-                  child: PieChart(
-                    PieChartData(
-                      pieTouchData: PieTouchData(touchCallback: (event, response) {
-                        setState(() { touchedPieIndex = response?.touchedSection?.touchedSectionIndex?? -1; });
-                      }),
-                      sectionsSpace: 2,
-                      sections: [
-                        PieChartSectionData(color: Colors.orange, value: current, title: '${current.toStringAsFixed(0)}', radius: touchedPieIndex == 0? 60 : 50, titleStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-                        PieChartSectionData(color: Colors.red.shade400, value: sold, title: '${sold.toStringAsFixed(0)}', radius: touchedPieIndex == 1? 60 : 50, titleStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-                      ],
-                      centerSpaceRadius: 30,
-                    ),
-                  ),
-                ),
-                SizedBox(height: 8),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  _legend(Colors.orange, 'In Stock'),
-                  SizedBox(width: 16),
-                  _legend(Colors.red.shade400, 'Sold'),
-                ])
-              ]),
-            ),
-          ),
+          Card(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 3, child: Padding(padding: EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Stock Breakdown', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
+            SizedBox(height: 16),
+            history.isEmpty? Center(child: Text('No history yet', style: TextStyle(color: Colors.grey))) : AspectRatio(aspectRatio: 1.3, child: PieChart(PieChartData(pieTouchData: PieTouchData(touchCallback: (event, response) { setState(() { touchedPieIndex = response?.touchedSection?.touchedSectionIndex?? -1; });}), sectionsSpace: 2, sections: [PieChartSectionData(color: Colors.orange, value: current, title: '${current.toStringAsFixed(0)}', radius: touchedPieIndex == 0? 60 : 50, titleStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)), PieChartSectionData(color: Colors.red.shade400, value: sold, title: '${sold.toStringAsFixed(0)}', radius: touchedPieIndex == 1? 60 : 50, titleStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white))], centerSpaceRadius: 30,)))),
+            SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [_legend(Colors.orange, 'In Stock'), SizedBox(width: 16), _legend(Colors.red.shade400, 'Sold')])
+          ]))),
           SizedBox(height: 20),
-
-          // 2. BAR CHART
-          Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: 3,
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Last 7 Days Activity', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
-                SizedBox(height: 16),
-                AspectRatio(
-                  aspectRatio: 1.6,
-                  child: BarChart(
-                    BarChartData(
-                      barTouchData: BarTouchData(touchCallback: (event, response) {
-                        setState(() { touchedBarIndex = response?.spot?.touchedBarGroupIndex?? -1; });
-                      }),
-                      titlesData: FlTitlesData(
-                        bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, meta) {
-                          if(v.toInt() < last7Days.length) return Padding(padding: EdgeInsets.only(top: 4), child: Text(last7Days[v.toInt()], style: TextStyle(fontSize: 10)));
-                          return Text('');
-                        })),
-                        leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
-                        rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      barGroups: List.generate(last7Days.length, (i) {
-                        String day = last7Days[i];
-                        return BarChartGroupData(
-                          x: i,
-                          barRods: [
-                            BarChartRodData(toY: salesByDay[day]?? 0, color: Colors.red, width: 8, borderRadius: BorderRadius.circular(4)),
-                            BarChartRodData(toY: topupsByDay[day]?? 0, color: Colors.green, width: 8, borderRadius: BorderRadius.circular(4)),
-                          ],
-                          showingTooltipIndicators: touchedBarIndex == i? [0,1] : [],
-                        );
-                      }),
-                      groupsSpace: 12, // FIX for v0.70.2
-                    ),
-                  ),
-                ),
-                SizedBox(height: 8),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  _legend(Colors.red, 'Sales'),
-                  SizedBox(width: 16),
-                  _legend(Colors.green, 'Topups'),
-                ])
-              ]),
-            ),
-          ),
+          Card(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 3, child: Padding(padding: EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Last 7 Days Activity', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
+            SizedBox(height: 16),
+            last7Days.isEmpty? Center(child: Text('No activity in last 7 days', style: TextStyle(color: Colors.grey))) : AspectRatio(aspectRatio: 1.6, child: BarChart(BarChartData(barTouchData: BarTouchData(touchCallback: (event, response) { setState(() { touchedBarIndex = response?.spot?.touchedBarGroupIndex?? -1; });}), titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, meta) { if(v.toInt() < last7Days.length) return Padding(padding: EdgeInsets.only(top: 4), child: Text(last7Days[v.toInt()], style: TextStyle(fontSize: 10))); return Text(''); })), leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)), rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false))), borderData: FlBorderData(show: false), barGroups: List.generate(last7Days.length, (i) { String day = last7Days[i]; return BarChartGroupData(x: i, barRods: [BarChartRodData(toY: salesByDay[day]?? 0, color: Colors.red, width: 8, borderRadius: BorderRadius.circular(4)), BarChartRodData(toY: topupsByDay[day]?? 0, color: Colors.green, width: 8, borderRadius: BorderRadius.circular(4))], showingTooltipIndicators: touchedBarIndex == i? [0,1] : []); }), groupsSpace: 12,)))),
+            SizedBox(height: 8),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: [_legend(Colors.red, 'Sales'), SizedBox(width: 16), _legend(Colors.green, 'Topups')])
+          ]))),
           SizedBox(height: 20),
-
-          // 3. LINE CHART - FIXED BRACKETS
           Text('Stock Level Over Time', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
           SizedBox(height: 12),
-          AspectRatio(
-            aspectRatio: 1.7,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(show: true),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 22, getTitlesWidget: (v, meta)=>Text('D${v.toInt()+1}', style: TextStyle(fontSize: 10)))),
-                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
-                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                borderData: FlBorderData(show: true), // this is correct for LineChartData
-                lineBarsData: [
-                  LineChartBarData(spots: stockSpots, isCurved: true, color: Colors.orange, barWidth: 3, dotData: FlDotData(show: false), belowBarData: BarAreaData(show: true, color: Colors.orange.withOpacity(0.2))),
-                  LineChartBarData(spots: saleSpots, color: Colors.red, barWidth: 0, dotData: FlDotData(show: true, getDotPainter: (spot, percent, bar, index)=> FlDotCirclePainter(radius: 5, color: Colors.red, strokeWidth: 2, strokeColor: Colors.white))),
-                ]
-              ) // <- this was missing
-            ), // <- and this
-          ),
+          stockSpots.isEmpty? Center(child: Text('No history to show', style: TextStyle(color: Colors.grey))) : AspectRatio(aspectRatio: 1.7, child: LineChart(LineChartData(gridData: FlGridData(show: true), titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 22, getTitlesWidget: (v, meta)=>Text('D${v.toInt()+1}', style: TextStyle(fontSize: 10)))), leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)), rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)), topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false))), borderData: FlBorderData(show: true), lineBarsData: [LineChartBarData(spots: stockSpots, isCurved: true, color: Colors.orange, barWidth: 3, dotData: FlDotData(show: false), belowBarData: BarAreaData(show: true, color: Colors.orange.withOpacity(0.2))), LineChartBarData(spots: saleSpots, color: Colors.red, barWidth: 0, dotData: FlDotData(show: true, getDotPainter: (spot, percent, bar, index)=> FlDotCirclePainter(radius: 5, color: Colors.red, strokeWidth: 2, strokeColor: Colors.white)))]))),
           SizedBox(height: 24),
-
-          // 4. AI FEEDBACK CARD
-          Card(
-            color: Colors.orange.shade50,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('AI Feedback', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
-                SizedBox(height: 8),
-                Text(generateFeedback(), style: TextStyle(fontSize: 14)),
-              ]),
-            ),
-          )
+          Card(color: Colors.orange.shade50, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), child: Padding(padding: EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('AI Feedback', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)), SizedBox(height: 8), Text(generateFeedback(), style: TextStyle(fontSize: 14))]))),
         ],
       ),
     );
   }
 
   Widget _legend(Color color, String text) {
-    return Row(children: [
-      Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
-      SizedBox(width: 4),
-      Text(text, style: TextStyle(fontSize: 12))
-    ]);
+    return Row(children: [Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))), SizedBox(width: 4), Text(text, style: TextStyle(fontSize: 12))]);
   }
 }

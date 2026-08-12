@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ADD THIS
 import '../database/db_helper.dart';
 import 'printer_settings_page.dart';
 import '../services/print_service_mobile.dart';
@@ -45,8 +46,7 @@ class _SellPageState extends State<SellPage> {
           'name': stock['name'], 
           'qty': 1.0, 
           'price': (stock['unit_price'] as num).toDouble(),
-          'low_alert': (stock['low_alert'] as num).toDouble()
-        });
+        }); // REMOVED low_alert from cart
       }
       else {
         double existingQty = (existing.first['qty'] as num).toDouble();
@@ -69,7 +69,6 @@ class _SellPageState extends State<SellPage> {
     });
   }
 
-  // UPDATED: accept cart copy
   showReceiptDialog(double total, List<Map<String, dynamic>> cartToShow) {
     showDialog(
       context: context,
@@ -93,12 +92,11 @@ class _SellPageState extends State<SellPage> {
       await DBHelper.updateStockQty(stock['id'] as int, newQty);
     }
     
-    // MAKE A COPY before we clear cart
     final cartCopy = List<Map<String, dynamic>>.from(cart.map((e) => Map<String, dynamic>.from(e)));
-    showReceiptDialog(total, cartCopy); // pass copy to dialog
+    showReceiptDialog(total, cartCopy);
     
     try {
-      await printer.printReceipt(cartCopy, total); // also use copy for printing
+      await printer.printReceipt(cartCopy, total);
     } catch(e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sale saved. Print failed: $e'), backgroundColor: Colors.orange)
@@ -106,7 +104,7 @@ class _SellPageState extends State<SellPage> {
     }
     
     setState((){
-      cart.clear(); // now safe
+      cart.clear();
       loading = true;
     });
     await loadStocks();
@@ -227,14 +225,7 @@ class _SellPageState extends State<SellPage> {
               const SizedBox(height: 4),
               Text('\$${(s['unit_price'] as num).toDouble().toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700)),
               const SizedBox(height: 4),
-              Text(
-                'Left: $qty', 
-                style: TextStyle(
-                  fontSize: 12, 
-                  color: outOfStock? Colors.red : (qty < 5? Colors.orange : Colors.green),
-                  fontWeight: FontWeight.w600
-                )
-              )
+              Text('Left: $qty', style: TextStyle(fontSize: 12, color: outOfStock? Colors.red : (qty < 5? Colors.orange : Colors.green), fontWeight: FontWeight.w600))
             ]
           ),
         )
@@ -244,10 +235,35 @@ class _SellPageState extends State<SellPage> {
 }
 
 
-class _ReceiptDialog extends StatelessWidget {
+// UPDATED RECEIPT DIALOG
+class _ReceiptDialog extends StatefulWidget {
   final List<Map<String, dynamic>> cart;
   final double total;
   const _ReceiptDialog({required this.cart, required this.total});
+
+  @override
+  State<_ReceiptDialog> createState() => _ReceiptDialogState();
+}
+
+class _ReceiptDialogState extends State<_ReceiptDialog> {
+  String name = "RestroPro Kitchen";
+  String address = "Harare, ZW";
+  String phone = "";
+
+  @override
+  void initState() {
+    super.initState();
+    loadRestaurantDetails();
+  }
+
+  loadRestaurantDetails() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      name = prefs.getString('rest_name') ?? "RestroPro Kitchen";
+      address = prefs.getString('rest_address') ?? "Harare, ZW";
+      phone = prefs.getString('rest_phone') ?? "";
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -256,53 +272,39 @@ class _ReceiptDialog extends StatelessWidget {
       child: Container(
         width: 320,
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-        ),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.receipt_long, size: 40, color: Colors.orange),
             const SizedBox(height: 8),
-            Text('RESTROPRO', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold)),
-            Text('Harare, ZW', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+            Text(name.toUpperCase(), style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(address, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+            if(phone.isNotEmpty) Text(phone, style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
             Text(DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()), style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 12),
             Divider(thickness: 1, color: Colors.grey.shade300),
             
-            ...cart.map((item) {
+            ...widget.cart.map((item) {
               double qty = (item['qty'] as num).toDouble();
               double price = (item['price'] as num).toDouble();
-              double lowAlert = (item['low_alert'] as num?)?.toDouble() ?? 0;
-              
-              String quality = qty > lowAlert * 2 ? 'Good' : qty > lowAlert ? 'OK' : 'Low';
-              Color qualityColor = quality == 'Good' ? Colors.green : quality == 'OK' ? Colors.orange : Colors.red;
 
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
+                child: Row( // REMOVED STOCK QUALITY ROW
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(child: Text('${item['name']}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600))),
-                        Text('\$${(qty * price).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${item['name']}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
+                          Text('Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: qualityColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                          child: Text('Stock: $quality', style: TextStyle(fontSize: 10, color: qualityColor, fontWeight: FontWeight.w600))
-                        )
-                      ],
-                    ),
+                    Text('\$${(qty * price).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold)),
                   ],
                 ),
               );
@@ -313,12 +315,12 @@ class _ReceiptDialog extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('TOTAL', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold)),
-                Text('\$${total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text('\$${widget.total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 16),
             Text('Thank you for your business!', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600)),
-            Text('Powered by RestroPro', style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade400)),
+            Text('Powered by CoreVanta', style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade400)),
           ],
         ),
       ),
