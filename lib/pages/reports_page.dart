@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ADDED
 import 'dart:io';
 import 'dart:async';
 import '../database/db_helper.dart';
@@ -21,6 +22,7 @@ class _ReportsPageState extends State<ReportsPage> {
   List<Map<String, dynamic>> topups = [];
   double revenue = 0;
   bool loading = true;
+  String restaurantName = "RestroPro Kitchen"; // ADDED
 
   @override
   void initState() {
@@ -30,6 +32,11 @@ class _ReportsPageState extends State<ReportsPage> {
 
   Future<void> load() async {
     setState(() => loading = true);
+    
+    // ADDED: Load restaurant name from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    restaurantName = prefs.getString('rest_name') ?? restaurantName;
+
     stocks = await DBHelper.getStocks();
     sales = await DBHelper.getSales();
     topups = await DBHelper.getTopUps();
@@ -124,7 +131,7 @@ class _ReportsPageState extends State<ReportsPage> {
     pdf.addPage(pw.MultiPage(
       pageTheme: pw.PageTheme(theme: pw.ThemeData.withFont(base: font, bold: fontBold)),
       build: (context) => [
-        pw.Header(level: 0, child: pw.Text('RestroPro Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold))),
+        pw.Header(level: 0, child: pw.Text('$restaurantName Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold))), // CHANGED
         pw.Text('Harare, ZW • ${DateTime.now().toString().substring(0,16)}'),
         pw.Divider(),
         pw.Text('Total Revenue: \$${revenue.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
@@ -133,13 +140,13 @@ class _ReportsPageState extends State<ReportsPage> {
         pw.Text('Stock Details', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 10),
         pw.Table.fromTextArray(
-          headers: ['Meal', 'Qty', 'Price', 'Value', 'Status'],
+          headers: ['Meal', 'Qty Left', 'Price', 'Value', 'Status'], // CHANGED: Qty -> Qty Left
           data: stocks.map((s){
             double qty = (s['qty'] as num).toDouble();
             double price = (s['unit_price'] as num).toDouble();
             double lowAlert = (s['low_alert'] as num).toDouble();
             String status = qty <= lowAlert ? 'LOW' : 'OK';
-            return [s['name'], qty.toString(), '\$${price.toStringAsFixed(2)}', '\$${(qty * price).toStringAsFixed(2)}', status];
+            return [s['name'], qty.toStringAsFixed(1), '\$${price.toStringAsFixed(2)}', '\$${(qty * price).toStringAsFixed(2)}', status]; // CHANGED: toStringAsFixed(1)
           }).toList(),
           headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           cellAlignment: pw.Alignment.centerLeft,
@@ -156,9 +163,10 @@ class _ReportsPageState extends State<ReportsPage> {
     ));
 
     final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/RestroPro_Report_${DateTime.now().millisecondsSinceEpoch}.pdf');
+    final safeName = restaurantName.replaceAll(' ', '_'); // ADDED
+    final file = File('${dir.path}/${safeName}_Report_${DateTime.now().millisecondsSinceEpoch}.pdf'); // CHANGED
     await file.writeAsBytes(await pdf.save());
-    Share.shareXFiles([XFile(file.path)], text: 'RestroPro Report');
+    Share.shareXFiles([XFile(file.path)], text: '$restaurantName Report'); // CHANGED
   }
 
   @override
