@@ -17,6 +17,7 @@ dependencies:
   esc_pos_utils_plus: ^2.0.4
   shared_preferences: ^2.2.3
   pdf: ^3.11.3
+  permission_handler: ^11.3.1
   printing: ^5.12.2
   google_fonts: ^6.2.1
   fl_chart: ^0.70.2

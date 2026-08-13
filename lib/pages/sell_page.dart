@@ -19,6 +19,9 @@ class _SellPageState extends State<SellPage> {
   final printer = PrintService();
   bool loading = true;
 
+  // Options for every stock
+  final List<String> variants = ['Sadza', 'Rice', 'Chips', 'Plain'];
+
   @override
   void initState() {
     super.initState();
@@ -30,7 +33,28 @@ class _SellPageState extends State<SellPage> {
     setState(() => loading = false);
   }
 
-  addToCart(Map<String, dynamic> stock) {
+  // NEW: Show variant picker before adding to cart
+  showVariantPicker(Map<String, dynamic> stock) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Select Option for ${stock['name']}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: variants.map((v) => ListTile(
+            title: Text(v, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)), // BOLD
+            onTap: () {
+              Navigator.pop(context);
+              addToCart(stock, v);
+            },
+          )).toList(),
+        ),
+      )
+    );
+  }
+
+  addToCart(Map<String, dynamic> stock, String variant) {
     double stockQty = (stock['qty'] as num).toDouble();
     if(stockQty <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -39,14 +63,16 @@ class _SellPageState extends State<SellPage> {
       return;
     }
     setState((){
-      var existing = cart.where((c)=>c['stock_id']==stock['id']).toList();
+      // key is now stock_id + variant
+      var existing = cart.where((c)=>c['stock_id']==stock['id'] && c['variant']==variant).toList();
       if(existing.isEmpty) {
         cart.add({
           'stock_id': stock['id'], 
           'name': stock['name'], 
+          'variant': variant, // ADDED
           'qty': 1.0, 
           'price': (stock['unit_price'] as num).toDouble(),
-        }); // REMOVED low_alert from cart
+        }); 
       }
       else {
         double existingQty = (existing.first['qty'] as num).toDouble();
@@ -122,86 +148,91 @@ class _SellPageState extends State<SellPage> {
         elevation: 0,
         actions: [
           IconButton(
-            icon: Icon(Icons.settings_bluetooth),
+            icon: const Icon(Icons.settings_bluetooth),
             onPressed: ()=> Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterSettingsPage()))
           )
         ]
       ),
       body: loading 
        ? const Center(child: CircularProgressIndicator(color: Colors.orange))
-        : Column(children:[
-            Expanded(
-              flex: 3,
-              child: GridView.count(
-                padding: const EdgeInsets.all(12),
-                crossAxisCount: 2, 
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                children: stocks.map((s) => _productCard(s)).toList()
-              )
-            ),
-            
-            Container(
-              height: 220,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]
-              ),
-              child: Column(children: [
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text('Cart (${cart.length})', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16)),
-                ),
+        : LayoutBuilder( // FIXED: Fits screen perfectly, no zoom
+            builder: (context, constraints) {
+              return Column(children:[
                 Expanded(
-                  child: cart.isEmpty 
-                   ? Center(child: Text('Tap items to add', style: TextStyle(color: Colors.grey.shade500)))
-                    : ListView(children: cart.map((i) => ListTile(
-                        dense: true,
-                        title: Text(i['name']), 
-                        subtitle: Text('\$${(i['price'] as num).toDouble().toStringAsFixed(2)} each'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(icon: Icon(Icons.remove_circle_outline, size: 20), onPressed: ()=>removeFromCart(i)),
-                            Text('${(i['qty'] as num).toDouble()}', style: TextStyle(fontWeight: FontWeight.bold)),
-                            IconButton(icon: Icon(Icons.add_circle_outline, size: 20), onPressed: ()=>addToCart(stocks.firstWhere((s)=>s['id']==i['stock_id']))),
-                          ],
-                        )
-                      )).toList()
-                ),
-                ), 
-              ]),
-            ),
-            
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: Colors.white,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Total', style: TextStyle(color: Colors.grey.shade600)),
-                      Text('\$${total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: cart.isEmpty? null : checkout,
-                    icon: Icon(Icons.print),
-                    label: Text('Pay & Print'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))
-                    ),
+                  flex: 3,
+                  child: GridView.count(
+                    padding: const EdgeInsets.all(12),
+                    crossAxisCount: constraints.maxWidth > 600? 3 : 2, // responsive
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 0.9, // FIXED: better fit
+                    children: stocks.map((s) => _productCard(s)).toList()
                   )
-                ],
-              )
-            )
-          ]),
+                ),
+                
+                Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]
+                  ),
+                  child: Column(children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text('Cart (${cart.length})', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16)),
+                    ),
+                    Expanded(
+                      child: cart.isEmpty 
+                       ? Center(child: Text('Tap items to add', style: TextStyle(color: Colors.grey.shade500)))
+                        : ListView(children: cart.map((i) => ListTile(
+                            dense: true,
+                            title: Text('${i['name']} - ${i['variant']}', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)), // ADDED VARIANT
+                            subtitle: Text('\$${(i['price'] as num).toDouble().toStringAsFixed(2)} each'),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(icon: const Icon(Icons.remove_circle_outline, size: 20), onPressed: ()=>removeFromCart(i)),
+                                Text('${(i['qty'] as num).toDouble()}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                IconButton(icon: const Icon(Icons.add_circle_outline, size: 20), onPressed: ()=>addToCart(stocks.firstWhere((s)=>s['id']==i['stock_id']), i['variant'])),
+                              ],
+                            )
+                          )).toList()
+                    ),
+                    ), 
+                  ]),
+                ),
+                
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.white,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Total', style: TextStyle(color: Colors.grey.shade600)),
+                          Text('\$${total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: cart.isEmpty? null : checkout,
+                        icon: const Icon(Icons.print),
+                        label: Text('Pay & Print'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))
+                        ),
+                      )
+                    ],
+                  )
+                )
+              ]);
+            }
+          ),
     );
   }
 
@@ -212,7 +243,7 @@ class _SellPageState extends State<SellPage> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
-        onTap: outOfStock? null : ()=>addToCart(s),
+        onTap: outOfStock? null : ()=>showVariantPicker(s), // CHANGED: open picker
         borderRadius: BorderRadius.circular(16),
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -288,10 +319,11 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
             ...widget.cart.map((item) {
               double qty = (item['qty'] as num).toDouble();
               double price = (item['price'] as num).toDouble();
+              String variant = item['variant'] ?? ''; // ADDED
 
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row( // REMOVED STOCK QUALITY ROW
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -300,7 +332,7 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('${item['name']}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
-                          Text('Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)),
+                          Text('$variant - Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)), // ADDED VARIANT
                         ],
                       ),
                     ),

@@ -39,7 +39,7 @@ class PrintService {
     String phone = prefs.getString('rest_phone') ?? "";
 
     BluetoothDevice device = BluetoothDevice(remoteId: DeviceIdentifier(mac));
-    await device.connect(timeout: Duration(seconds: 15));
+    await device.connect(timeout: const Duration(seconds: 15));
     List<BluetoothService> services = await device.discoverServices();
 
     // Find writable characteristic
@@ -72,18 +72,27 @@ class PrintService {
     bytes += generator.text(DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()), styles: PosStyles(align: PosAlign.center));
     bytes += generator.hr();
     
-    // ITEMS
+    // ITEMS - NOW WITH VARIANT
     for(var item in cart) {
       double qty = (item['qty'] as num).toDouble();
       double price = (item['price'] as num).toDouble();
-      bytes += generator.text('${item['name']}');
-      bytes += generator.text('${qty}x \$${price.toStringAsFixed(2)}  = \$${(qty*price).toStringAsFixed(2)}');
+      String variant = item['variant'] ?? ''; // ADDED
+      
+      bytes += generator.text('${item['name']}', styles: PosStyles(bold: true)); // NAME BOLD
+      if(variant.isNotEmpty) {
+        bytes += generator.text('  $variant'); // INDENTED VARIANT
+      }
+      bytes += generator.row([
+        PosColumn(text: '  ${qty}x \$${price.toStringAsFixed(2)}', width: 7), // INDENTED
+        PosColumn(text: '\$${(qty*price).toStringAsFixed(2)}', width: 5, styles: PosStyles(align: PosAlign.right)),
+      ]);
     }
     
     bytes += generator.hr();
-    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyles(bold: true, align: PosAlign.right));
+    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyles(bold: true, align: PosAlign.right, height: PosTextSize.size1));
+    bytes += generator.feed(1);
     bytes += generator.text('Thank you for your business!', styles: PosStyles(align: PosAlign.center));
-    bytes += generator.text('Powered by RestroPro', styles: PosStyles(align: PosAlign.center, width: PosTextSize.size1));
+    bytes += generator.text('Powered by CoreVanta', styles: PosStyles(align: PosAlign.center, width: PosTextSize.size1));
     bytes += generator.feed(2);
     bytes += generator.cut();
 
@@ -92,10 +101,10 @@ class PrintService {
     for (var i = 0; i < bytes.length; i += chunkSize) {
       int end = (i + chunkSize > bytes.length) ? bytes.length : i + chunkSize;
       await characteristic.write(bytes.sublist(i, end), withoutResponse: true);
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 50));
     }
 
-    await Future.delayed(Duration(seconds: 1));
+    await Future.delayed(const Duration(seconds: 1));
     await device.disconnect();
   }
 }
