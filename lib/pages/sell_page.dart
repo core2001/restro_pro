@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ADD THIS
+import 'package:shared_preferences/shared_preferences.dart';
 import '../database/db_helper.dart';
 import 'printer_settings_page.dart';
 import '../services/print_service_mobile.dart';
@@ -19,7 +19,6 @@ class _SellPageState extends State<SellPage> {
   final printer = PrintService();
   bool loading = true;
 
-  // Options for every stock
   final List<String> variants = ['Sadza', 'Rice', 'Chips', 'Plain'];
 
   @override
@@ -33,22 +32,26 @@ class _SellPageState extends State<SellPage> {
     setState(() => loading = false);
   }
 
-  // NEW: Show variant picker before adding to cart
   showVariantPicker(Map<String, dynamic> stock) {
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Select Option for ${stock['name']}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: variants.map((v) => ListTile(
-            title: Text(v, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)), // BOLD
-            onTap: () {
-              Navigator.pop(context);
-              addToCart(stock, v);
-            },
-          )).toList(),
+        title: Text('Select Option for ${stock['name']}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 22 : 18)),
+        content: SizedBox(
+          width: size.width * 0.85,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: variants.map((v) => ListTile(
+              title: Text(v, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 18 : 16)), // BOLD
+              onTap: () {
+                Navigator.pop(context);
+                addToCart(stock, v);
+              },
+            )).toList(),
+          ),
         ),
       )
     );
@@ -63,13 +66,12 @@ class _SellPageState extends State<SellPage> {
       return;
     }
     setState((){
-      // key is now stock_id + variant
       var existing = cart.where((c)=>c['stock_id']==stock['id'] && c['variant']==variant).toList();
       if(existing.isEmpty) {
         cart.add({
           'stock_id': stock['id'], 
           'name': stock['name'], 
-          'variant': variant, // ADDED
+          'variant': variant,
           'qty': 1.0, 
           'price': (stock['unit_price'] as num).toDouble(),
         }); 
@@ -140,123 +142,134 @@ class _SellPageState extends State<SellPage> {
   @override
   Widget build(BuildContext context) {
     double total = cart.fold(0.0, (sum, i)=> sum + ((i['qty'] as num)*(i['price'] as num)));
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
+    final isLandscape = size.width > size.height;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       appBar: AppBar(
-        title: Text('New Sale', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)), 
+        title: Text('New Sale', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 22 : 18)), 
         backgroundColor: Colors.orange,
         elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_bluetooth),
+            icon: Icon(Icons.settings_bluetooth, size: isTablet? 28 : 24),
             onPressed: ()=> Navigator.push(context, MaterialPageRoute(builder: (_) => PrinterSettingsPage()))
           )
         ]
       ),
       body: loading 
-       ? const Center(child: CircularProgressIndicator(color: Colors.orange))
-        : LayoutBuilder( // FIXED: Fits screen perfectly, no zoom
-            builder: (context, constraints) {
-              return Column(children:[
-                Expanded(
-                  flex: 3,
-                  child: GridView.count(
-                    padding: const EdgeInsets.all(12),
-                    crossAxisCount: constraints.maxWidth > 600? 3 : 2, // responsive
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 0.9, // FIXED: better fit
-                    children: stocks.map((s) => _productCard(s)).toList()
-                  )
+      ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+        : Column(children:[
+            // PRODUCTS GRID
+            Expanded(
+              flex: isTablet? 5 : 3,
+              child: GridView.builder(
+                padding: EdgeInsets.all(isTablet? 20 : 12),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isTablet? (isLandscape? 5 : 4) : 2, // 5 cols tablet landscape
+                  crossAxisSpacing: isTablet? 20 : 12,
+                  mainAxisSpacing: isTablet? 20 : 12,
+                  childAspectRatio: isTablet? 1.0 : 0.9,
                 ),
-                
-                Container(
-                  height: 220,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]
-                  ),
-                  child: Column(children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text('Cart (${cart.length})', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 16)),
-                    ),
-                    Expanded(
-                      child: cart.isEmpty 
-                       ? Center(child: Text('Tap items to add', style: TextStyle(color: Colors.grey.shade500)))
-                        : ListView(children: cart.map((i) => ListTile(
-                            dense: true,
-                            title: Text('${i['name']} - ${i['variant']}', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)), // ADDED VARIANT
-                            subtitle: Text('\$${(i['price'] as num).toDouble().toStringAsFixed(2)} each'),
+                itemCount: stocks.length,
+                itemBuilder: (context, index) => _productCard(stocks[index], isTablet),
+              )
+            ),
+            
+            // CART SECTION - % of screen instead of fixed 220
+            Container(
+              height: size.height * (isTablet? 0.38 : 0.32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]
+              ),
+              child: Column(children: [
+                Padding(
+                  padding: EdgeInsets.all(isTablet? 16 : 12),
+                  child: Text('Cart (${cart.length})', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: isTablet? 20 : 16)),
+                ),
+                Expanded(
+                  child: cart.isEmpty 
+                  ? Center(child: Text('Tap items to add', style: TextStyle(color: Colors.grey.shade500, fontSize: isTablet? 16 : 14)))
+                    : ListView.builder(
+                      itemCount: cart.length,
+                      itemBuilder: (context, index) {
+                        var i = cart[index];
+                        return ListTile(
+                            dense:!isTablet,
+                            title: Text('${i['name']} - ${i['variant']}', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: isTablet? 18 : 15)), // VARIANT
+                            subtitle: Text('\$${(i['price'] as num).toDouble().toStringAsFixed(2)} each', style: TextStyle(fontSize: isTablet? 15 : 12)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                IconButton(icon: const Icon(Icons.remove_circle_outline, size: 20), onPressed: ()=>removeFromCart(i)),
-                                Text('${(i['qty'] as num).toDouble()}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                IconButton(icon: const Icon(Icons.add_circle_outline, size: 20), onPressed: ()=>addToCart(stocks.firstWhere((s)=>s['id']==i['stock_id']), i['variant'])),
+                                IconButton(icon: Icon(Icons.remove_circle_outline, size: isTablet? 28 : 20), onPressed: ()=>removeFromCart(i)),
+                                Text('${(i['qty'] as num).toDouble()}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: isTablet? 18 : 16)),
+                                IconButton(icon: Icon(Icons.add_circle_outline, size: isTablet? 28 : 20), onPressed: ()=>addToCart(stocks.firstWhere((s)=>s['id']==i['stock_id']), i['variant'])),
                               ],
                             )
-                          )).toList()
+                          );
+                      }
                     ),
-                    ), 
-                  ]),
-                ),
-                
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Colors.white,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                ), 
+              ]),
+            ),
+            
+            // CHECKOUT BAR
+            Container(
+              padding: EdgeInsets.all(isTablet? 20 : 16),
+              color: Colors.white,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Total', style: TextStyle(color: Colors.grey.shade600)),
-                          Text('\$${total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: cart.isEmpty? null : checkout,
-                        icon: const Icon(Icons.print),
-                        label: Text('Pay & Print'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))
-                        ),
-                      )
+                      Text('Total', style: TextStyle(color: Colors.grey.shade600, fontSize: isTablet? 16 : 14)),
+                      Text('\$${total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: isTablet? 32 : 24, fontWeight: FontWeight.bold)),
                     ],
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: cart.isEmpty? null : checkout,
+                    icon: Icon(Icons.print, size: isTablet? 28 : 24),
+                    label: Text('Pay & Print', style: TextStyle(fontSize: isTablet? 18 : 16)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: isTablet? 30 : 20, vertical: isTablet? 18 : 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))
+                    ),
                   )
-                )
-              ]);
-            }
-          ),
+                ],
+              )
+            )
+          ]),
     );
   }
 
-  Widget _productCard(Map<String, dynamic> s) {
+  Widget _productCard(Map<String, dynamic> s, bool isTablet) {
     double qty = (s['qty'] as num).toDouble();
     bool outOfStock = qty <= 0;
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
-        onTap: outOfStock? null : ()=>showVariantPicker(s), // CHANGED: open picker
+        onTap: outOfStock? null : ()=>showVariantPicker(s),
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(isTablet? 16 : 12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center, 
             children:[
-              Icon(Icons.fastfood, size: 32, color: outOfStock? Colors.grey : Colors.orange),
-              const SizedBox(height: 8),
-              Text(s['name'], textAlign: TextAlign.center, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              Icon(Icons.fastfood, size: isTablet? 48 : 32, color: outOfStock? Colors.grey : Colors.orange),
+              SizedBox(height: isTablet? 12 : 8),
+              Text(s['name'], textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: isTablet? 18 : 14)),
               const SizedBox(height: 4),
-              Text('\$${(s['unit_price'] as num).toDouble().toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700)),
+              Text('\$${(s['unit_price'] as num).toDouble().toStringAsFixed(2)}', style: TextStyle(color: Colors.grey.shade700, fontSize: isTablet? 16 : 14)),
               const SizedBox(height: 4),
-              Text('Left: $qty', style: TextStyle(fontSize: 12, color: outOfStock? Colors.red : (qty < 5? Colors.orange : Colors.green), fontWeight: FontWeight.w600))
+              Text('Left: $qty', style: TextStyle(fontSize: isTablet? 14 : 12, color: outOfStock? Colors.red : (qty < 5? Colors.orange : Colors.green), fontWeight: FontWeight.w600))
             ]
           ),
         )
@@ -266,7 +279,7 @@ class _SellPageState extends State<SellPage> {
 }
 
 
-// UPDATED RECEIPT DIALOG
+// RECEIPT DIALOG - RESPONSIVE
 class _ReceiptDialog extends StatefulWidget {
   final List<Map<String, dynamic>> cart;
   final double total;
@@ -290,18 +303,21 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
   loadRestaurantDetails() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      name = prefs.getString('rest_name') ?? "RestroPro Kitchen";
-      address = prefs.getString('rest_address') ?? "Harare, ZW";
-      phone = prefs.getString('rest_phone') ?? "";
+      name = prefs.getString('rest_name')?? "RestroPro Kitchen";
+      address = prefs.getString('rest_address')?? "Harare, ZW";
+      phone = prefs.getString('rest_phone')?? "";
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final dialogWidth = size.width > 600? 420.0 : 320.0; // Wider on tablet
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        width: 320,
+        width: dialogWidth,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
         child: Column(
@@ -316,10 +332,10 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
             const SizedBox(height: 12),
             Divider(thickness: 1, color: Colors.grey.shade300),
             
-            ...widget.cart.map((item) {
+           ...widget.cart.map((item) {
               double qty = (item['qty'] as num).toDouble();
               double price = (item['price'] as num).toDouble();
-              String variant = item['variant'] ?? ''; // ADDED
+              String variant = item['variant']?? '';
 
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -332,7 +348,7 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('${item['name']}', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
-                          Text('$variant - Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)), // ADDED VARIANT
+                          Text('$variant - Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)),
                         ],
                       ),
                     ),

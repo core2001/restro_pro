@@ -5,7 +5,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ADDED
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'dart:async';
 import '../database/db_helper.dart';
@@ -22,7 +22,7 @@ class _ReportsPageState extends State<ReportsPage> {
   List<Map<String, dynamic>> topups = [];
   double revenue = 0;
   bool loading = true;
-  String restaurantName = "RestroPro Kitchen"; // ADDED
+  String restaurantName = "RestroPro Kitchen";
 
   @override
   void initState() {
@@ -33,7 +33,6 @@ class _ReportsPageState extends State<ReportsPage> {
   Future<void> load() async {
     setState(() => loading = true);
     
-    // ADDED: Load restaurant name from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     restaurantName = prefs.getString('rest_name') ?? restaurantName;
 
@@ -44,10 +43,10 @@ class _ReportsPageState extends State<ReportsPage> {
     setState(() => loading = false);
   }
 
-  // UPDATED: Show receipt with stock names
   Future<void> _showReceiptPopup(Map<String, dynamic> sale) async {
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
     final db = await DBHelper.database;
-    // JOIN to get stock name
     final items = await db.rawQuery('''
       SELECT si.qty, si.price, s.name 
       FROM sale_items si 
@@ -69,17 +68,17 @@ class _ReportsPageState extends State<ReportsPage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Column(
             children: [
-              const Icon(Icons.receipt_long, size: 40, color: Colors.orange),
+              Icon(Icons.receipt_long, size: isTablet? 50 : 40, color: Colors.orange),
               const SizedBox(height: 8),
-              Text('Receipt', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+              Text('Receipt', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 22 : 18)),
               Text(
                 sale['date'].toString().substring(0,16), 
-                style: const TextStyle(fontSize: 12, color: Colors.grey)
+                style: TextStyle(fontSize: isTablet? 14 : 12, color: Colors.grey)
               )
             ],
           ),
           content: SizedBox(
-            width: double.maxFinite,
+            width: size.width * 0.9,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -93,12 +92,12 @@ class _ReportsPageState extends State<ReportsPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)), // <- NAME
+                        Text(name, style: GoogleFonts.poppins(fontSize: isTablet? 16 : 14, fontWeight: FontWeight.w600)),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade700)),
-                            Text('\$${(qty * price).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600)),
+                            Text('Qty: $qty x \$${price.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: isTablet? 14 : 12, color: Colors.grey.shade700)),
+                            Text('\$${(qty * price).toStringAsFixed(2)}', style: GoogleFonts.poppins(fontSize: isTablet? 15 : 13, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ],
@@ -109,12 +108,12 @@ class _ReportsPageState extends State<ReportsPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('TOTAL', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('\$${total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text('TOTAL', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 18 : 16)),
+                    Text('\$${total.toStringAsFixed(2)}', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 18 : 16)),
                   ],
                 ),
                 const SizedBox(height: 10),
-                const Text('Auto closing in 6s...', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                Text('Auto closing in 6s...', style: TextStyle(fontSize: isTablet? 13 : 11, color: Colors.grey)),
               ],
             ),
           ),
@@ -131,7 +130,7 @@ class _ReportsPageState extends State<ReportsPage> {
     pdf.addPage(pw.MultiPage(
       pageTheme: pw.PageTheme(theme: pw.ThemeData.withFont(base: font, bold: fontBold)),
       build: (context) => [
-        pw.Header(level: 0, child: pw.Text('$restaurantName Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold))), // CHANGED
+        pw.Header(level: 0, child: pw.Text('$restaurantName Report', style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold))),
         pw.Text('Harare, ZW • ${DateTime.now().toString().substring(0,16)}'),
         pw.Divider(),
         pw.Text('Total Revenue: \$${revenue.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
@@ -140,13 +139,13 @@ class _ReportsPageState extends State<ReportsPage> {
         pw.Text('Stock Details', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 10),
         pw.Table.fromTextArray(
-          headers: ['Meal', 'Qty Left', 'Price', 'Value', 'Status'], // CHANGED: Qty -> Qty Left
+          headers: ['Meal', 'Qty Left', 'Price', 'Value', 'Status'],
           data: stocks.map((s){
             double qty = (s['qty'] as num).toDouble();
             double price = (s['unit_price'] as num).toDouble();
             double lowAlert = (s['low_alert'] as num).toDouble();
             String status = qty <= lowAlert ? 'LOW' : 'OK';
-            return [s['name'], qty.toStringAsFixed(1), '\$${price.toStringAsFixed(2)}', '\$${(qty * price).toStringAsFixed(2)}', status]; // CHANGED: toStringAsFixed(1)
+            return [s['name'], qty.toStringAsFixed(1), '\$${price.toStringAsFixed(2)}', '\$${(qty * price).toStringAsFixed(2)}', status];
           }).toList(),
           headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
           cellAlignment: pw.Alignment.centerLeft,
@@ -163,111 +162,136 @@ class _ReportsPageState extends State<ReportsPage> {
     ));
 
     final dir = await getApplicationDocumentsDirectory();
-    final safeName = restaurantName.replaceAll(' ', '_'); // ADDED
-    final file = File('${dir.path}/${safeName}_Report_${DateTime.now().millisecondsSinceEpoch}.pdf'); // CHANGED
+    final safeName = restaurantName.replaceAll(' ', '_');
+    final file = File('${dir.path}/${safeName}_Report_${DateTime.now().millisecondsSinceEpoch}.pdf');
     await file.writeAsBytes(await pdf.save());
-    Share.shareXFiles([XFile(file.path)], text: '$restaurantName Report'); // CHANGED
+    Share.shareXFiles([XFile(file.path)], text: '$restaurantName Report');
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
+    final isLandscape = size.width > size.height;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F9),
       appBar: AppBar(
-        title: Text('Reports', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)), 
+        title: Text('Reports', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 22 : 18)), 
         backgroundColor: Colors.orange, 
         elevation: 0,
-        actions:[ IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: generatePDF, tooltip: 'Export PDF') ]
+        actions:[ IconButton(icon: Icon(Icons.picture_as_pdf, size: isTablet? 28 : 24), onPressed: generatePDF, tooltip: 'Export PDF') ]
       ),
       body: loading 
         ? const Center(child: CircularProgressIndicator(color: Colors.orange))
         : RefreshIndicator(
           onRefresh: load,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Colors.orange, Colors.deepOrange]),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Total Revenue', style: GoogleFonts.poppins(color: Colors.white70)),
-                    Text('\$${revenue.toStringAsFixed(2)}', style: GoogleFonts.poppins(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-                  ],
-                ),
+          child: Center( // CENTER ON TABLET
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1000),
+              child: ListView(
+                padding: EdgeInsets.all(isTablet? 24 : 16),
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(isTablet? 28 : 20),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Colors.orange, Colors.deepOrange]),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Total Revenue', style: GoogleFonts.poppins(color: Colors.white70, fontSize: isTablet? 16 : 14)),
+                        Text('\$${revenue.toStringAsFixed(2)}', style: GoogleFonts.poppins(color: Colors.white, fontSize: isTablet? 36 : 28, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: isTablet? 32 : 24),
+
+                  Text('Stock Details', style: GoogleFonts.poppins(fontSize: isTablet? 22 : 18, fontWeight: FontWeight.w600)),
+                  SizedBox(height: isTablet? 16 : 12),
+                  
+                  // RESPONSIVE GRID FOR STOCK CARDS
+                  isTablet 
+                  ? GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: isLandscape? 3 : 2,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: 1.6,
+                      ),
+                      itemCount: stocks.length,
+                      itemBuilder: (context, index) => _stockCard(stocks[index], isTablet),
+                    )
+                  : Column(children: stocks.map((s) => _stockCard(s, isTablet)).toList()),
+
+                  SizedBox(height: isTablet? 32 : 24),
+                  Text('Sales History', style: GoogleFonts.poppins(fontSize: isTablet? 22 : 18, fontWeight: FontWeight.w600)),
+                  SizedBox(height: isTablet? 16 : 12),
+                  
+                  ...sales.map((s) => Card(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: ListTile(
+                      onTap: () => _showReceiptPopup(s),
+                      leading: Icon(Icons.receipt_long, color: Colors.green, size: isTablet? 32 : 24),
+                      title: Text(s['date'].toString().substring(0,16), style: TextStyle(fontSize: isTablet? 16 : 14)),
+                      trailing: Text('\$${(s['total'] as num).toDouble().toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: isTablet? 18 : 16)),
+                    ),
+                  )),
+                  const SizedBox(height: 40),
+                ],
               ),
-              const SizedBox(height: 24),
-
-              Text('Stock Details', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              ...stocks.map((s) => _stockCard(s)),
-
-              const SizedBox(height: 24),
-              Text('Sales History', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 12),
-              ...sales.map((s) => Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  onTap: () => _showReceiptPopup(s), // <- TAP TO SHOW RECEIPT
-                  leading: const Icon(Icons.receipt_long, color: Colors.green),
-                  title: Text(s['date'].toString().substring(0,16)),
-                  trailing: Text('\$${(s['total'] as num).toDouble().toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              )),
-              const SizedBox(height: 40),
-            ],
+            ),
           ),
         ),
     );
   }
 
-  Widget _stockCard(Map<String, dynamic> s) {
+  Widget _stockCard(Map<String, dynamic> s, bool isTablet) {
     double qty = (s['qty'] as num).toDouble();
     double price = (s['unit_price'] as num).toDouble();
     double lowAlert = (s['low_alert'] as num).toDouble();
     bool isLow = qty <= lowAlert;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: isTablet? 0 : 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(isTablet? 18 : 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(child: Text(s['name'], style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600))),
+                Expanded(child: Text(s['name'], maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.poppins(fontSize: isTablet? 18 : 16, fontWeight: FontWeight.w600))),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: isTablet? 12 : 10, vertical: isTablet? 6 : 4),
                   decoration: BoxDecoration(
                     color: isLow ? Colors.red.shade100 : Colors.green.shade100,
                     borderRadius: BorderRadius.circular(20)
                   ),
                   child: Text(isLow ? 'LOW STOCK' : 'IN STOCK',
-                    style: TextStyle(color: isLow ? Colors.red.shade800 : Colors.green.shade800, fontSize: 11, fontWeight: FontWeight.bold)
+                    style: TextStyle(color: isLow ? Colors.red.shade800 : Colors.green.shade800, fontSize: isTablet? 13 : 11, fontWeight: FontWeight.bold)
                   ),
                 )
               ],
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: isTablet? 14 : 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _detailItem('Quantity', '$qty'),
-                _detailItem('Unit Price', '\$${price.toStringAsFixed(2)}'),
-                _detailItem('Value', '\$${(qty * price).toStringAsFixed(2)}'),
+                _detailItem('Quantity', '$qty', isTablet),
+                _detailItem('Unit Price', '\$${price.toStringAsFixed(2)}', isTablet),
+                _detailItem('Value', '\$${(qty * price).toStringAsFixed(2)}', isTablet),
               ],
             ),
             if (isLow) ...[
-              const SizedBox(height: 8),
-              Text('Alert at: $lowAlert', style: TextStyle(color: Colors.red.shade700, fontSize: 12))
+              SizedBox(height: isTablet? 10 : 8),
+              Text('Alert at: $lowAlert', style: TextStyle(color: Colors.red.shade700, fontSize: isTablet? 14 : 12))
             ]
           ],
         ),
@@ -275,12 +299,12 @@ class _ReportsPageState extends State<ReportsPage> {
     );
   }
 
-  Widget _detailItem(String label, String value) {
+  Widget _detailItem(String label, String value, bool isTablet) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-        Text(value, style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: isTablet? 14 : 12)),
+        Text(value, style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: isTablet? 16 : 14)),
       ],
     );
   }
