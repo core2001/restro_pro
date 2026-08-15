@@ -43,6 +43,53 @@ class _ReportsPageState extends State<ReportsPage> {
     setState(() => loading = false);
   }
 
+  // NEW: RESET SALES WITH COUNTDOWN
+  void resetSalesDialog() {
+    int countdown = 10;
+    bool canReset = false;
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
+    
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return StatefulBuilder(builder: (context, setState) {
+            Future.delayed(const Duration(seconds: 1), () {
+              if (countdown > 0 && mounted) setState(() => countdown--);
+              if (countdown == 0) setState(() => canReset = true);
+            });
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text('⚠️ DELETE ALL RECEIPTS', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 22 : 18, color: Colors.red)),
+              content: Text(
+                'This will permanently delete all ${sales.length} sales records and reset Total Revenue to \$0.00. This cannot be undone.\n\nEnable "Delete" in $countdown seconds',
+                style: TextStyle(fontSize: isTablet? 16 : 14)
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context), 
+                  child: Text('Cancel', style: TextStyle(fontSize: isTablet? 16 : 14))
+                ),
+                ElevatedButton(
+                    onPressed: canReset
+                      ? () async {
+                            await DBHelper.clearAllSales(); // YOU NEED THIS IN DBHELPER
+                            if (mounted) Navigator.pop(context);
+                            await load();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('All receipts deleted'), backgroundColor: Colors.red)
+                            );
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    child: Text(canReset? 'Delete' : 'Wait $countdown', style: TextStyle(fontSize: isTablet? 16 : 14)))
+              ],
+            );
+          });
+        });
+  }
+
   Future<void> _showReceiptPopup(Map<String, dynamic> sale) async {
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
@@ -180,7 +227,15 @@ class _ReportsPageState extends State<ReportsPage> {
         title: Text('Reports', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 22 : 18)), 
         backgroundColor: Colors.orange, 
         elevation: 0,
-        actions:[ IconButton(icon: Icon(Icons.picture_as_pdf, size: isTablet? 28 : 24), onPressed: generatePDF, tooltip: 'Export PDF') ]
+        actions:[ 
+          IconButton(
+            icon: Icon(Icons.delete_forever, size: isTablet? 28 : 24), // RESET ICON
+            onPressed: sales.isEmpty ? null : resetSalesDialog, 
+            tooltip: 'Reset All Receipts',
+            color: Colors.white
+          ),
+          IconButton(icon: Icon(Icons.picture_as_pdf, size: isTablet? 28 : 24), onPressed: generatePDF, tooltip: 'Export PDF') 
+        ]
       ),
       body: loading 
         ? const Center(child: CircularProgressIndicator(color: Colors.orange))

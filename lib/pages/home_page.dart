@@ -57,6 +57,50 @@ class _HomePageState extends State<HomePage> {
     setState(() => loading = false);
   }
 
+  // NEW: RESET REVENUE WITH COUNTDOWN
+  void resetRevenueDialog() {
+    int countdown = 10;
+    bool canReset = false;
+    final size = MediaQuery.of(context).size;
+    final isTablet = size.width > 600;
+    
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return StatefulBuilder(builder: (context, setState) {
+            Future.delayed(const Duration(seconds: 1), () {
+              if (countdown > 0 && mounted) setState(() => countdown--);
+              if (countdown == 0) setState(() => canReset = true);
+            });
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text('⚠️ RESET TOTAL REVENUE', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 22 : 18)),
+              content: Text(
+                'This will reset Total Revenue to \$0.00. All sales history will still remain.\n\nEnable "Reset" in $countdown seconds',
+                style: TextStyle(fontSize: isTablet? 16 : 14)
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context), 
+                  child: Text('Cancel', style: TextStyle(fontSize: isTablet? 16 : 14))
+                ),
+                ElevatedButton(
+                    onPressed: canReset
+                      ? () async {
+                            await DBHelper.resetTotalRevenue(); // YOU NEED THIS IN DBHELPER
+                            if (mounted) Navigator.pop(context);
+                            await loadData();
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    child: Text(canReset? 'Reset' : 'Wait...', style: TextStyle(fontSize: isTablet? 16 : 14)))
+              ],
+            );
+          });
+        });
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -98,7 +142,7 @@ class _HomePageState extends State<HomePage> {
                       childAspectRatio: isTablet? 1.4 : 1.6,
                       children: [
                         _statCard('Today Sales', '\$${todaySales.toStringAsFixed(2)}', Icons.today, Colors.green, isTablet),
-                        _statCard('Total Revenue', '\$${revenue.toStringAsFixed(2)}', Icons.attach_money, Colors.orange, isTablet),
+                        _statCard('Total Revenue', '\$${revenue.toStringAsFixed(2)}', Icons.attach_money, Colors.orange, isTablet, onTap: resetRevenueDialog), // ADDED onTap
                         _statCard('Total Items', '$totalStocks', Icons.inventory_2, Colors.blue, isTablet),
                         _statCard('Low Stock', '${lowStocks.length}', Icons.warning, Colors.red, isTablet),
                       ],
@@ -176,17 +220,27 @@ class _HomePageState extends State<HomePage> {
     return 'Evening';
   }
 
-  Widget _statCard(String title, String value, IconData icon, Color color, bool isTablet) {
-    return Container(
-      padding: EdgeInsets.all(isTablet? 20 : 16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)]),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: isTablet? 32 : 24),
-        SizedBox(height: isTablet? 12 : 8),
-        Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: isTablet? 14 : 12)),
-        const SizedBox(height: 4),
-        Text(value, style: GoogleFonts.poppins(fontSize: isTablet? 20 : 16, fontWeight: FontWeight.bold)),
-      ]),
+  Widget _statCard(String title, String value, IconData icon, Color color, bool isTablet, {VoidCallback? onTap}) {
+    return InkWell( // WRAPPED WITH INKWELL FOR TAP
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: EdgeInsets.all(isTablet? 20 : 16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: color, size: isTablet? 32 : 24),
+              if(onTap != null) Icon(Icons.refresh, color: Colors.grey.shade400, size: isTablet? 22 : 18) // shows reset icon
+            ],
+          ),
+          SizedBox(height: isTablet? 12 : 8),
+          Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: isTablet? 14 : 12)),
+          const SizedBox(height: 4),
+          Text(value, style: GoogleFonts.poppins(fontSize: isTablet? 20 : 16, fontWeight: FontWeight.bold)),
+        ]),
+      ),
     );
   }
 

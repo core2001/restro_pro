@@ -3,7 +3,7 @@ import 'package:path/path.dart';
 
 class DBHelper {
   static Database? _db;
-  
+
   static Future<Database> get database async {
     if(_db!= null) return _db!;
     _db = await _initDB();
@@ -19,12 +19,12 @@ class DBHelper {
     // 1. STOCKS - Added initial_qty
     await db.execute('''
       CREATE TABLE stocks(
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        name TEXT, 
-        qty REAL, 
-        initial_qty REAL, 
-        unit TEXT, 
-        unit_price REAL, 
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        qty REAL,
+        initial_qty REAL,
+        unit TEXT,
+        unit_price REAL,
         low_alert REAL
       )
     ''');
@@ -60,7 +60,7 @@ class DBHelper {
     if(oldVersion < 2) {
       // Add new columns/tables for v2
       await db.execute('ALTER TABLE stocks ADD COLUMN initial_qty REAL');
-      
+
       await db.execute('CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY, total_revenue REAL)');
       var settings = await db.query('settings');
       if(settings.isEmpty) await db.insert('settings', {'id': 1, 'total_revenue': 0.0});
@@ -100,17 +100,17 @@ class DBHelper {
     await _logHistory(id, 'TOPUP', (data['qty'] as num).toDouble(), (data['qty'] as num).toDouble());
     return id;
   }
-  
+
   static Future<List<Map<String, dynamic>>> getStocks() async {
     final db = await database;
     return db.query('stocks', orderBy: 'name ASC');
   }
-  
+
   static Future<int> updateStock(int id, Map<String, dynamic> data) async {
     final db = await database;
     return db.update('stocks', data, where: 'id=?', whereArgs: [id]);
   }
-  
+
   static Future<int> deleteStock(int id) async {
     final db = await database;
     // 1. Get stock to calculate revenue to deduct
@@ -121,16 +121,16 @@ class DBHelper {
       double current = (stock['qty'] as num).toDouble();
       double soldQty = initial - current;
       double revenueToDeduct = soldQty * (stock['unit_price'] as num).toDouble();
-      
+
       // 2. Deduct from total revenue
       await db.rawUpdate('UPDATE settings SET total_revenue = total_revenue -? WHERE id = 1', [revenueToDeduct]);
     }
-    
+
     // 3. Delete stock + history
     await db.delete('stock_history', where: 'stock_id=?', whereArgs: [id]);
     return db.delete('stocks', where: 'id=?', whereArgs: [id]);
   }
-  
+
   static Future updateStockQty(int id, double newQty) async {
     final db = await database;
     await db.update('stocks', {'qty': newQty}, where: 'id =?', whereArgs: [id]);
@@ -140,7 +140,7 @@ class DBHelper {
     final db = await database;
     var stock = (await db.query('stocks', where: 'id =?', whereArgs: [id])).first;
     double newQty = (stock['qty'] as num).toDouble() + qty;
-    
+
     await db.update('stocks', {'qty': newQty}, where: 'id =?', whereArgs: [id]);
     await db.insert('topups', {'stock_id': id, 'qty': qty, 'date': DateTime.now().toIso8601String()});
     await _logHistory(id, 'TOPUP', qty, newQty);
@@ -152,7 +152,7 @@ class DBHelper {
     final db = await database;
     // 1. Add to total revenue
     await db.rawUpdate('UPDATE settings SET total_revenue = total_revenue +? WHERE id = 1', [total]);
-    
+
     int saleId = await db.insert('sales', {'date': DateTime.now().toIso8601String(), 'total': total});
     for(var item in items){
       await db.insert('sale_items', {
@@ -161,7 +161,7 @@ class DBHelper {
         'qty': item['qty'],
         'price': item['price']
       });
-      
+
       var stock = (await db.query('stocks', where: 'id =?', whereArgs: [item['stock_id']])).first;
       double newQty = (stock['qty'] as num).toDouble() - (item['qty'] as num).toDouble();
       await db.update('stocks', {'qty': newQty}, where: 'id =?', whereArgs: [item['stock_id']]);
@@ -171,9 +171,9 @@ class DBHelper {
   }
 
   static Future<List<Map<String, dynamic>>> getSales() => database.then((db)=>db.query('sales', orderBy: 'id DESC'));
-  
+
   static Future<List<Map<String, dynamic>>> getTopUps() => database.then((db)=>db.query('topups', orderBy: 'id DESC'));
-  
+
   static Future<double> getTotalRevenue() async {
     final db = await database;
     var res = await db.query('settings', where: 'id = 1');
@@ -184,6 +184,23 @@ class DBHelper {
   static Future<List<Map<String, dynamic>>> getStockHistory(int stockId) async {
     final db = await database;
     return await db.query('stock_history', where: 'stock_id =?', whereArgs: [stockId], orderBy: 'date ASC');
+  }
+
+  // NEW: Reset Total Revenue to Zero - Used by HomePage
+  static Future<void> resetTotalRevenue() async {
+    final db = await database;
+    await db.update('settings', {'total_revenue': 0.0}, where: 'id = 1');
+  }
+
+  // NEW: Clear All Sales/Receipts - Used by ReportsPage
+  static Future<void> clearAllSales() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('sale_items'); // delete line items first
+      await txn.delete('sales'); // then delete sales
+    });
+    // Reset revenue to 0 after clearing
+    await resetTotalRevenue();
   }
 
   // NEW: Delete All

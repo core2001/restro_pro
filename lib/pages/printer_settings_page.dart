@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:permission_handler/permission_handler.dart'; // ADDED
+import 'package:permission_handler/permission_handler.dart';
 import '../services/print_service_mobile.dart';
 
 class PrinterSettingsPage extends StatefulWidget {
@@ -12,10 +12,12 @@ class PrinterSettingsPage extends StatefulWidget {
 
 class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
   final printer = PrintService();
-  List<BluetoothDevice> pairedDevices = []; // ADDED
+  List<BluetoothDevice> pairedDevices = [];
   List<ScanResult> devices = [];
   String? selectedMac;
   bool scanning = false;
+  bool connecting = false;
+  BluetoothDevice? connectedDevice; // NEW: track live connection
 
   @override
   void initState() {
@@ -24,12 +26,11 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
   }
 
   init() async {
-    await _requestPermissions(); // ADDED
+    await _requestPermissions();
     await loadSaved();
-    await loadPaired(); // ADDED
+    await loadPaired();
   }
 
-  // ADDED: Request permissions for Android 12+
   Future<void> _requestPermissions() async {
     await Permission.bluetoothScan.request();
     await Permission.bluetoothConnect.request();
@@ -41,7 +42,6 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
     setState(() {});
   }
 
-  // ADDED: Load already paired bluetooth devices
   loadPaired() async {
     if (await FlutterBluePlus.isOn) {
       pairedDevices = await FlutterBluePlus.bondedDevices;
@@ -61,7 +61,6 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
       return;
     }
 
-    // Listen to scan results
     var subscription = FlutterBluePlus.scanResults.listen((results) {
       setState(() {
         devices = results.where((r) => r.device.name.isNotEmpty).toList();
@@ -82,15 +81,34 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
     }
   }
 
-  select(BluetoothDevice device) async { // CHANGED: now accepts BluetoothDevice
-    await printer.savePrinter(device.remoteId.str);
-    setState(() => selectedMac = device.remoteId.str);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Printer saved: ${device.name}'), backgroundColor: Colors.green)
-    );
+  // UPDATED: Now actually connects to test it
+  select(BluetoothDevice device) async {
+    setState(() => connecting = true);
+    try {
+      // 1. Try to connect to verify it's a real printer
+      await device.connect(timeout: const Duration(seconds: 8), autoConnect: false);
+      await Future.delayed(const Duration(milliseconds: 500));
+      await device.discoverServices(); // this will fail if not ESC/POS
+      await device.disconnect(); // disconnect after test
+
+      // 2. If connection worked, save it
+      await printer.savePrinter(device.remoteId.str);
+      setState(() {
+        selectedMac = device.remoteId.str;
+        connectedDevice = device; // mark as last connected
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Printer connected: ${device.name}'), backgroundColor: Colors.green)
+      );
+    } catch(e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to connect: $e'), backgroundColor: Colors.red)
+      );
+    } finally {
+      setState(() => connecting = false);
+    }
   }
 
-  // ADDED: Test print function
   testPrint() async {
     if(selectedMac == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -120,7 +138,7 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
         backgroundColor: Colors.orange,
         actions: [
           if(selectedMac != null)
-            IconButton(icon: const Icon(Icons.print), onPressed: testPrint, tooltip: 'Test Print') // ADDED
+            IconButton(icon: const Icon(Icons.print), onPressed: connecting? null : testPrint, tooltip: 'Test Print')
         ]
       ),
       body: Column(
@@ -135,9 +153,11 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
             ),
           ),
           
+          if(connecting) const LinearProgressIndicator(color: Colors.orange), // NEW
+
           Expanded(
             child: (pairedDevices.isEmpty && devices.isEmpty && !scanning)
-              ? Center( // FIXED: Show message instead of white page
+              ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -152,41 +172,53 @@ class _PrinterSettingsPageState extends State<PrinterSettingsPage> {
                 )
               : ListView(
                   children: [
-                    // SHOW PAIRED DEVICES FIRST
                     if(pairedDevices.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                         child: Text('Paired Printers', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                       ),
-                      ...pairedDevices.map((d) => ListTile(
-                        leading: Icon(Icons.print, color: selectedMac == d.remoteId.str ? Colors.green : Colors.orange),
-                        title: Text(d.name),
-                        subtitle: Text(d.remoteId.str),
-                        trailing: selectedMac == d.remoteId.str ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                        onTap: () => select(d),
-                      )),
+                      ...pairedDevices.map((d) => _buildDeviceTile(d)),
                       const Divider()
                     ],
 
-                    // SHOW SCANNED DEVICES
                     if(devices.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                         child: Text('Nearby Printers', style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                       ),
-                      ...devices.map((d) => ListTile(
-                        leading: Icon(Icons.print_outlined, color: selectedMac == d.device.remoteId.str ? Colors.green : Colors.grey),
-                        title: Text(d.device.name),
-                        subtitle: Text(d.device.remoteId.str),
-                        trailing: selectedMac == d.device.remoteId.str ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                        onTap: () => select(d.device),
-                      ))
+                      ...devices.map((d) => _buildDeviceTile(d.device))
                     ]
                   ],
                 )
           )
         ],
       ),
+    );
+  }
+
+  // NEW HELPER: Builds tile with "Connected" status
+  Widget _buildDeviceTile(BluetoothDevice d) {
+    bool isSelected = selectedMac == d.remoteId.str;
+    bool isConnected = isSelected && connectedDevice?.remoteId == d.remoteId; // we just connected to it
+
+    return ListTile(
+      leading: Icon(Icons.print, color: isSelected ? Colors.green : Colors.orange),
+      title: Text(d.name),
+      subtitle: Text(d.remoteId.str),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if(isSelected) 
+            Chip(
+              label: Text(isConnected ? 'Connected' : 'Selected', style: const TextStyle(color: Colors.white, fontSize: 11)),
+              backgroundColor: isConnected ? Colors.green : Colors.orange,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            ),
+          const SizedBox(width: 8),
+          if(isSelected) const Icon(Icons.check_circle, color: Colors.green),
+        ],
+      ),
+      onTap: connecting ? null : () => select(d),
     );
   }
 }
