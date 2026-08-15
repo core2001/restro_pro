@@ -38,8 +38,8 @@ class PrintService {
     String address = prefs.getString('rest_address') ?? "Harare, ZW";
     String phone = prefs.getString('rest_phone') ?? "";
 
-    BluetoothDevice device = BluetoothDevice(remoteId: DeviceIdentifier(mac));
-    await device.connect(timeout: const Duration(seconds: 15));
+    BluetoothDevice device = BluetoothDevice.fromId(mac); // Updated for flutter_blue_plus v1.32+
+    await device.connect(timeout: const Duration(seconds: 15), autoConnect: false);
     List<BluetoothService> services = await device.discoverServices();
 
     // Find writable characteristic
@@ -58,53 +58,56 @@ class PrintService {
       throw Exception("Printer not supported - no write characteristic found");
     }
 
-    // Generate ESC/POS bytes
+    // Generate ESC/POS bytes - CY-BX58D is 58mm
     final profile = await CapabilityProfile.load();
-    final generator = Generator(PaperSize.mm80, profile);
+    final generator = Generator(PaperSize.mm58, profile); // CHANGED: mm58 for CY-BX58D
     List<int> bytes = [];
 
+    // CY-BX58D FIX 1: INIT PRINTER - clears buffer
+    bytes += [0x1B, 0x40]; // ESC @
+
     // HEADER WITH RESTAURANT DETAILS
-    bytes += generator.text(name.toUpperCase(), styles: PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2));
-    bytes += generator.text(address, styles: PosStyles(align: PosAlign.center));
+    bytes += generator.text(name.toUpperCase(), styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2));
+    bytes += generator.text(address, styles: const PosStyles(align: PosAlign.center));
     if(phone.isNotEmpty) {
-      bytes += generator.text(phone, styles: PosStyles(align: PosAlign.center));
+      bytes += generator.text(phone, styles: const PosStyles(align: PosAlign.center));
     }
-    bytes += generator.text(DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()), styles: PosStyles(align: PosAlign.center));
+    bytes += generator.text(DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()), styles: const PosStyles(align: PosAlign.center));
     bytes += generator.hr();
     
-    // ITEMS - NOW WITH VARIANT
+    // ITEMS - WITH VARIANT
     for(var item in cart) {
       double qty = (item['qty'] as num).toDouble();
       double price = (item['price'] as num).toDouble();
-      String variant = item['variant'] ?? ''; // ADDED
+      String variant = item['variant'] ?? '';
       
-      bytes += generator.text('${item['name']}', styles: PosStyles(bold: true)); // NAME BOLD
+      bytes += generator.text('${item['name']}', styles: const PosStyles(bold: true)); // NAME BOLD
       if(variant.isNotEmpty) {
         bytes += generator.text('  $variant'); // INDENTED VARIANT
       }
       bytes += generator.row([
         PosColumn(text: '  ${qty}x \$${price.toStringAsFixed(2)}', width: 7), // INDENTED
-        PosColumn(text: '\$${(qty*price).toStringAsFixed(2)}', width: 5, styles: PosStyles(align: PosAlign.right)),
+        PosColumn(text: '\$${(qty*price).toStringAsFixed(2)}', width: 5, styles: const PosStyles(align: PosAlign.right)),
       ]);
     }
     
     bytes += generator.hr();
-    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: PosStyles(bold: true, align: PosAlign.right, height: PosTextSize.size1));
-    bytes += generator.feed(1);
-    bytes += generator.text('Thank you for your business!', styles: PosStyles(align: PosAlign.center));
-    bytes += generator.text('Powered by CoreVanta', styles: PosStyles(align: PosAlign.center, width: PosTextSize.size1));
+    bytes += generator.text('TOTAL: \$${total.toStringAsFixed(2)}', styles: const PosStyles(bold: true, align: PosAlign.right, height: PosTextSize.size1));
+    bytes += generator.feed(3); // CY-BX58D FIX 2: Feed paper
+    bytes += generator.text('Thank you for your business!', styles: const PosStyles(align: PosAlign.center));
+    bytes += generator.text('Powered by CoreVanta', styles: const PosStyles(align: PosAlign.center, width: PosTextSize.size1));
     bytes += generator.feed(2);
-    bytes += generator.cut();
+    bytes += generator.cut(); // CY-BX58D FIX 3: Cut command
 
-    // Send in chunks
-    int chunkSize = 20;
+    // CY-BX58D FIX 4: Send in chunks of 16 bytes with 50ms delay
+    int chunkSize = 16; // Was 20, CY-BX58D buffer is small
     for (var i = 0; i < bytes.length; i += chunkSize) {
       int end = (i + chunkSize > bytes.length) ? bytes.length : i + chunkSize;
-      await characteristic.write(bytes.sublist(i, end), withoutResponse: true);
-      await Future.delayed(const Duration(milliseconds: 50));
+      await characteristic.write(bytes.sublist(i, end), withoutResponse: false); // withoutResponse: false is more stable
+      await Future.delayed(const Duration(milliseconds: 50)); // CY-BX58D needs this
     }
 
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 800)); // Let printer finish
     await device.disconnect();
   }
 }
