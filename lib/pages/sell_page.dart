@@ -45,7 +45,7 @@ class _SellPageState extends State<SellPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: variants.map((v) => ListTile(
-              title: Text(v, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 18 : 16)), // BOLD
+              title: Text(v, style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: isTablet? 18 : 16)),
               onTap: () {
                 Navigator.pop(context);
                 addToCart(stock, v);
@@ -59,12 +59,17 @@ class _SellPageState extends State<SellPage> {
 
   addToCart(Map<String, dynamic> stock, String variant) {
     double stockQty = (stock['qty'] as num).toDouble();
-    if(stockQty <= 0) {
+    
+    // Check total qty in cart for this stock_id
+    double qtyInCart = cart.where((c)=>c['stock_id']==stock['id']).fold(0.0, (sum, i)=> sum + (i['qty'] as num).toDouble());
+    
+    if(qtyInCart >= stockQty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${stock['name']} is Out of Stock'), backgroundColor: Colors.red)
       );
       return;
     }
+    
     setState((){
       var existing = cart.where((c)=>c['stock_id']==stock['id'] && c['variant']==variant).toList();
       if(existing.isEmpty) {
@@ -77,14 +82,7 @@ class _SellPageState extends State<SellPage> {
         }); 
       }
       else {
-        double existingQty = (existing.first['qty'] as num).toDouble();
-        if(existingQty >= stockQty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Not enough stock'), backgroundColor: Colors.orange)
-          );
-          return;
-        }
-        existing.first['qty'] = existingQty + 1.0;
+        existing.first['qty'] = (existing.first['qty'] as num).toDouble() + 1.0;
       }
     });
   }
@@ -114,11 +112,19 @@ class _SellPageState extends State<SellPage> {
     
     await DBHelper.makeSale(cart, total); 
     
+    // NEW: Group by stock_id and subtract total qty from main stock
+    Map<int, double> stockDeductions = {};
     for(var item in cart) {
-      var stock = stocks.firstWhere((s) => s['id'] == item['stock_id']);
-      double newQty = (stock['qty'] as num).toDouble() - (item['qty'] as num).toDouble();
-      await DBHelper.updateStockQty(stock['id'] as int, newQty);
+      int stockId = item['stock_id'];
+      double qty = (item['qty'] as num).toDouble();
+      stockDeductions[stockId] = (stockDeductions[stockId]?? 0.0) + qty;
     }
+    
+    stockDeductions.forEach((stockId, totalQtyToDeduct) async {
+      var stock = stocks.firstWhere((s) => s['id'] == stockId);
+      double newQty = (stock['qty'] as num).toDouble() - totalQtyToDeduct;
+      await DBHelper.updateStockQty(stockId, newQty);
+    });
     
     final cartCopy = List<Map<String, dynamic>>.from(cart.map((e) => Map<String, dynamic>.from(e)));
     showReceiptDialog(total, cartCopy);
@@ -160,15 +166,14 @@ class _SellPageState extends State<SellPage> {
         ]
       ),
       body: loading 
-      ? const Center(child: CircularProgressIndicator(color: Colors.orange))
+     ? const Center(child: CircularProgressIndicator(color: Colors.orange))
         : Column(children:[
-            // PRODUCTS GRID
             Expanded(
               flex: isTablet? 5 : 3,
               child: GridView.builder(
                 padding: EdgeInsets.all(isTablet? 20 : 12),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: isTablet? (isLandscape? 5 : 4) : 2, // 5 cols tablet landscape
+                  crossAxisCount: isTablet? (isLandscape? 5 : 4) : 2,
                   crossAxisSpacing: isTablet? 20 : 12,
                   mainAxisSpacing: isTablet? 20 : 12,
                   childAspectRatio: isTablet? 1.0 : 0.9,
@@ -178,9 +183,9 @@ class _SellPageState extends State<SellPage> {
               )
             ),
             
-            // CART SECTION - % of screen instead of fixed 220
+            // CART SECTION - REDUCED HEIGHT: was 0.32 now 0.26
             Container(
-              height: size.height * (isTablet? 0.38 : 0.32),
+              height: size.height * (isTablet? 0.38 : 0.26),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -193,14 +198,14 @@ class _SellPageState extends State<SellPage> {
                 ),
                 Expanded(
                   child: cart.isEmpty 
-                  ? Center(child: Text('Tap items to add', style: TextStyle(color: Colors.grey.shade500, fontSize: isTablet? 16 : 14)))
+                 ? Center(child: Text('Tap items to add', style: TextStyle(color: Colors.grey.shade500, fontSize: isTablet? 16 : 14)))
                     : ListView.builder(
                       itemCount: cart.length,
                       itemBuilder: (context, index) {
                         var i = cart[index];
                         return ListTile(
                             dense:!isTablet,
-                            title: Text('${i['name']} - ${i['variant']}', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: isTablet? 18 : 15)), // VARIANT
+                            title: Text('${i['name']} - ${i['variant']}', style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: isTablet? 18 : 15)),
                             subtitle: Text('\$${(i['price'] as num).toDouble().toStringAsFixed(2)} each', style: TextStyle(fontSize: isTablet? 15 : 12)),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -217,7 +222,6 @@ class _SellPageState extends State<SellPage> {
               ]),
             ),
             
-            // CHECKOUT BAR
             Container(
               padding: EdgeInsets.all(isTablet? 20 : 16),
               color: Colors.white,
@@ -279,12 +283,10 @@ class _SellPageState extends State<SellPage> {
 }
 
 
-// RECEIPT DIALOG - RESPONSIVE
 class _ReceiptDialog extends StatefulWidget {
   final List<Map<String, dynamic>> cart;
   final double total;
   const _ReceiptDialog({required this.cart, required this.total});
-
   @override
   State<_ReceiptDialog> createState() => _ReceiptDialogState();
 }
@@ -312,8 +314,7 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final dialogWidth = size.width > 600? 420.0 : 320.0; // Wider on tablet
-
+    final dialogWidth = size.width > 600? 420.0 : 320.0;
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
@@ -331,12 +332,10 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
             Text(DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()), style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 12),
             Divider(thickness: 1, color: Colors.grey.shade300),
-            
-           ...widget.cart.map((item) {
+          ...widget.cart.map((item) {
               double qty = (item['qty'] as num).toDouble();
               double price = (item['price'] as num).toDouble();
               String variant = item['variant']?? '';
-
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
@@ -357,7 +356,6 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
                 ),
               );
             }),
-            
             Divider(thickness: 1, color: Colors.grey.shade300),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
